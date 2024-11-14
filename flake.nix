@@ -20,9 +20,11 @@
         devShells.default = mkShell {
           nativeBuildInputs = [
             can-utils
+            ffmpeg
             openssl
             pkg-config
             rust-bin.nightly.latest.default
+            rust-analyzer
           ];
           LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
         };

@@ -3,4 +3,13 @@ name = "ffutility"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+opencv = ["dep:opencv"]
+
 [dependencies]
+ffmpeg-next = "7.1.0"
+opencv = { version = "0.93.4", optional = true }
+serde = { version = "1.0.215", features = ["derive"] }
+thiserror = "2.0.3"
+tracing = "0.1.40"
+
