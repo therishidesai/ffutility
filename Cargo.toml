@@ -18,3 +18,15 @@ serde = { version = "1.0.215", features = ["derive"] }
 thiserror = "2.0.3"
 tracing = "0.1.40"
 
+[dev-dependencies]
+anyhow = "1.0.93"
+bytes = "1.8.0"
+# h264-reader = "0.7.0"
+h264-reader = { git = "https://github.com/membraneframework-labs/h264-reader", branch = "slice-type-pub"}
+moq-karp = "0.8.1"
+moq-native = "0.5.6"
+moq-transfork = "0.4.3"
+tokio = { version = "1.41.1", features = ["full"] }
+url = { version = "2.5.3", features = ["serde"] }
+v4l = "0.14.0"
+
