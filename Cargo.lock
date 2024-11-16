@@ -552,6 +552,7 @@ dependencies = [
  "thiserror 2.0.3",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "url",
  "v4l",
 ]
