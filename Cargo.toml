@@ -12,9 +12,29 @@ readme = "README.md"
 opencv = ["dep:opencv"]
 
 [dependencies]
+anyhow = "1.0.93"
+bytes = "1.8.0"
 ffmpeg-next = "7.1.0"
+futures = "0.3.31"
+h264-reader = { git = "https://github.com/membraneframework-labs/h264-reader", branch = "slice-type-pub"}
+moq-karp = "0.11.0"
+moq-native = "0.5.9"
+moq-transfork = "0.7.0"
 opencv = { version = "0.93.4", optional = true }
 serde = { version = "1.0.215", features = ["derive"] }
 thiserror = "2.0.3"
+tokio = { version = "1.41.1", features = ["full"] }
+tokio-stream = { version = "0.1.16", features = ["full"] }
 tracing = "0.1.40"
+v4l = "0.14.0"
+
+[dev-dependencies]
+anyhow = "1.0.93"
+bytes = "1.8.0"
+futures = "0.3.31"
+moq-karp = "0.11.0"
+moq-native = "0.5.9"
+moq-transfork = "0.7.0"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+url = { version = "2.5.3", features = ["serde"] }
 
