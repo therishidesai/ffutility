@@ -86,7 +86,6 @@ impl AnnexBStreamImport {
                 description: description.freeze(),
                 bitrate: None,
             };
-            eprintln!("{:?}", track);
 
             let track = self.broadcast.video(track).unwrap();
             self.ctx = Some(ctx);
@@ -134,7 +133,6 @@ impl AnnexBStreamImport {
                                 full_nal_buf.extend_from_slice(&buf);
                             }
                         }
-                        eprintln!("got pps, {}", full_nal_buf.is_empty());
                         pps.set(full_nal_buf);
                     }
                     NalInterest::Buffer
