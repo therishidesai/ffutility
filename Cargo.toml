@@ -2,6 +2,11 @@
 name = "ffutility"
 version = "0.1.0"
 edition = "2021"
+license = "MPL-2.0"
+description = "A grab bag of video streaming utilities"
+homepage = "https://github.com/therishidesai/ffutility"
+repository = "https://github.com/therishidesai/ffutility"
+readme = "README.md"
 
 [features]
 opencv = ["dep:opencv"]
