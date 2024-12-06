@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use ffutility::{encoders::{EncoderConfig, EncoderType, FfmpegOptions, InputType}, parsers::AnnexBStreamImport, streams::V4lH264Stream};
+use ffutility::{encoders::{FfmpegOptions, InputType}, parsers::AnnexBStreamImport, streams::{V4lH264Stream, V4lH264Config}};
 
 use moq_karp::BroadcastProducer;
 use moq_native::quic;
@@ -23,7 +23,8 @@ async fn main() -> Result<()> {
         tls
     })?;
 
-    let session = quic_client.client.connect(&Url::parse("https://relay.quic.video").unwrap()).await?;
+    // let session = quic_client.client.connect(&Url::parse("https://relay.quic.video").unwrap()).await?;
+    let session = quic_client.client.connect(&Url::parse("https://sartv-relay.internal.saronic.dev:4443").unwrap()).await?;
     let session = moq_transfork::Session::connect(session).await?;
 
     let path = moq_transfork::Path::new().push("test-zed");
@@ -32,23 +33,17 @@ async fn main() -> Result<()> {
 
     let mut annexb_import = AnnexBStreamImport::new(broadcast);
 
-    let encoder_config = EncoderConfig {
-        input_width: 2560,
-        input_height: 720,
+    let v4l_config = V4lH264Config {
         output_width: 736,
         output_height: 414,
-        framerate: 30,
-        gop: Some(8),    // group of pictures, 2 keyframes/s
         bitrate: 300000, // bitrate
-        disable_b_frames: false,
-        enc_type: EncoderType::X264,
         input_type: InputType::YUYV422,
     };
 
     let mut ffmpeg_opts = FfmpegOptions::new();
     ffmpeg_opts.set("preset", "superfast");
 
-    let mut rx_stream = V4lH264Stream::new(encoder_config, ffmpeg_opts)?;
+    let mut rx_stream = V4lH264Stream::new(v4l_config, ffmpeg_opts)?;
     // let mut rx_reader = StreamReader::new(rx_stream);
 
     let mut track = annexb_import.init_from(&mut rx_stream).await?;
