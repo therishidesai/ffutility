@@ -14,16 +14,16 @@ use moq_karp::{BroadcastProducer, Dimensions, H264, Frame, Timestamp, Track, Tra
 
 use std::cell::Cell;
 use std::io::Read;
-use std::sync::mpsc::channel;
+use std::sync::{Arc, Mutex, mpsc::channel};
 
 pub struct AnnexBStreamImport {
-    broadcast: BroadcastProducer,
+    broadcast: Arc<Mutex<BroadcastProducer>>,
     codec: Option<H264>,
     ctx: Option<Context>,
 }
 
 impl AnnexBStreamImport {
-    pub fn new(broadcast: BroadcastProducer) -> Self {
+    pub fn new(broadcast: Arc<Mutex<BroadcastProducer>>) -> Self {
         Self {
             broadcast,
             codec: None,
@@ -57,8 +57,6 @@ impl AnnexBStreamImport {
             }
         });
 
-        // let mut buffer = BytesMut::new();
-        
         while !found_pps.get() && !found_sps.get() {
             if let Some(buffer) = input.next().await {
                 reader.push(&buffer);
@@ -87,7 +85,8 @@ impl AnnexBStreamImport {
                 bitrate: None,
             };
 
-            let track = self.broadcast.video(track).unwrap();
+            let mut broadcast = self.broadcast.lock().unwrap();
+            let track = broadcast.video(track).unwrap();
             self.ctx = Some(ctx);
 
             Ok(track)

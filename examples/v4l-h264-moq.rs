@@ -6,6 +6,7 @@ use moq_karp::BroadcastProducer;
 use moq_native::quic;
 
 use std::net::SocketAddr;
+use std::sync::{Arc, Mutex};
 
 use tracing_subscriber::EnvFilter;
 
@@ -30,7 +31,7 @@ async fn main() -> Result<()> {
 
     let broadcast = BroadcastProducer::new(session.clone(), path)?;
 
-    let mut annexb_import = AnnexBStreamImport::new(broadcast);
+    let mut annexb_import = AnnexBStreamImport::new(Arc::new(Mutex::new(broadcast)));
 
     let v4l_config = V4lH264Config {
         output_width: 736,
