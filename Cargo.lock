@@ -751,7 +751,7 @@ checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
 [[package]]
 name = "h264-reader"
 version = "0.7.1-dev"
-source = "git+https://github.com/membraneframework-labs/h264-reader?branch=slice-type-pub#3d532fd1cb2f88626b4c288ec38f573a44bc0094"
+source = "git+https://github.com/therishidesai/h264-reader#9881060816d9e20aa1d7469dd85ed7fa2f2b650f"
 dependencies = [
  "bitstream-io",
  "hex-slice",
