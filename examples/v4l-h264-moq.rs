@@ -23,8 +23,7 @@ async fn main() -> Result<()> {
         tls
     })?;
 
-    // let session = quic_client.client.connect(&Url::parse("https://relay.quic.video").unwrap()).await?;
-    let session = quic_client.client.connect(&Url::parse("https://sartv-relay.internal.saronic.dev:4443").unwrap()).await?;
+    let session = quic_client.client.connect(&Url::parse("https://relay.quic.video").unwrap()).await?;
     let session = moq_transfork::Session::connect(session).await?;
 
     let path = moq_transfork::Path::new().push("test-zed");
@@ -38,6 +37,7 @@ async fn main() -> Result<()> {
         output_height: 414,
         bitrate: 300000, // bitrate
         input_type: InputType::YUYV422,
+        video_dev: String::from("/dev/video0"),
     };
 
     let mut ffmpeg_opts = FfmpegOptions::new();

@@ -21,6 +21,7 @@ pub struct V4lH264Config {
     pub output_height: u32,
     pub bitrate: usize,
     pub input_type: InputType,
+    pub video_dev: String,
 }
 
 pub struct V4lH264Stream {
@@ -29,7 +30,7 @@ pub struct V4lH264Stream {
 impl V4lH264Stream {
     pub fn new(cfg: V4lH264Config, ffmpeg_opts: FfmpegOptions) -> Result<ReceiverStream<BytesMut>> {
         let (tx, rx) = mpsc::channel::<BytesMut>(10);
-        let video_dev = Device::with_path("/dev/video0")?;
+        let video_dev = Device::with_path(&cfg.video_dev)?;
         let format = video_dev.format()?;
         let ec = EncoderConfig {
             input_width: format.width,
