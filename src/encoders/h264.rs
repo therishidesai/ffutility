@@ -176,7 +176,18 @@ impl H264Encoder {
             self.input_height.try_into().unwrap(),
         );
 
-        in_frame.data_mut(0).copy_from_slice(input);
+        if in_frame.planes() > 1 {
+            let mut start_id = 0;
+            for i in 0..in_frame.planes() {
+                let buf_size = in_frame.data(i).len();
+                let end_id = start_id + buf_size;
+                in_frame.data_mut(i).copy_from_slice(&input[start_id..end_id]);
+                start_id = end_id;
+            }
+            // in_frame.data_mut(0).copy_from_slice(input);
+        } else {
+            in_frame.data_mut(0).copy_from_slice(input);
+        }
         self.scaler.run(&in_frame, &mut out_frame).unwrap();
         self.encode(out_frame)
     }

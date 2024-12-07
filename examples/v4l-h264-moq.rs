@@ -37,6 +37,7 @@ async fn main() -> Result<()> {
         output_width: 736,
         output_height: 414,
         bitrate: 300000, // bitrate
+        // input_type: InputType::YUV420P,
         input_type: InputType::YUYV422,
         video_dev: String::from("/dev/video0"),
     };
