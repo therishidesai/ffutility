@@ -8,6 +8,8 @@ use tokio::sync::mpsc;
 
 use tokio_stream::wrappers::ReceiverStream;
 
+use tracing::debug;
+
 use v4l::buffer::Type;
 use v4l::io::traits::CaptureStream;
 use v4l::video::traits::Capture;
@@ -32,6 +34,7 @@ impl V4lH264Stream {
         let (tx, rx) = mpsc::channel::<BytesMut>(10);
         let video_dev = Device::with_path(&cfg.video_dev)?;
         let format = video_dev.format()?;
+        debug!("V4L Format: {:?}", format);
         let ec = EncoderConfig {
             input_width: format.width,
             input_height: format.height,
@@ -50,8 +53,10 @@ impl V4lH264Stream {
         std::thread::spawn(move || {
             loop {
                 // TODO: Better error handling
-                let (m_buf, _meta) = stream.next().unwrap();
-                if let Some(encoded_frame) = encoder.encode_raw(&m_buf) {
+                let (m_buf, meta) = stream.next().unwrap();
+                let bytesused = meta.bytesused as usize;
+                // debug!("V4L bytesused: {}", meta.bytesused);
+                if let Some(encoded_frame) = encoder.encode_raw(&m_buf[..bytesused]) {
                     tx.blocking_send(encoded_frame.nal_bytes).unwrap();
                 }
             }

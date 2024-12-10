@@ -164,6 +164,7 @@ impl H264Encoder {
     }
 
     pub fn encode_raw(&mut self, input: &[u8]) -> Option<EncodedFrame> {
+        debug!("input len: {}", input.len());
         let mut out_frame = AvFrame::new(
             AvPixel::YUV420P,
             self.output_width.try_into().unwrap(),
