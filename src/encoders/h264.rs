@@ -42,6 +42,7 @@ impl EncoderType {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct EncoderConfig {
     pub input_width: u32,
     pub input_height: u32,
