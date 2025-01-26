@@ -75,21 +75,6 @@ pub struct H264Encoder {
     output_height: u32,
 }
 
-struct FrameIterator {
-    encoder: AvVideoEncoder,
-    pts: usize,
-}
-
-impl Iterator for FrameIterator {
-    type Item = EncodedFrame;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let curr_pts = self.pts;
-        self.pts += 1;
-        retrieve_nal(&mut self.encoder, curr_pts)
-    }
-}
-
 fn codec_context_as(codec: &AvCodec) -> Result<AvContext, H264EncoderError> {
     unsafe {
         let context_ptr = ffmpeg::ffi::avcodec_alloc_context3(codec.as_ptr());
@@ -211,50 +196,52 @@ impl H264Encoder {
 
     pub fn encode(&mut self, mut frame: AvFrame) -> Option<EncodedFrame> {
         frame.set_pts(Some(self.pts_count as i64));
+        self.encoder.send_frame(&frame).unwrap();
+        self.retrieve_nal()
+    }
+
+    /// Drains and consumes this encoder
+    pub fn drain(mut self) -> Result<Vec<EncodedFrame>, AvError> {
+        self.encoder.send_eof()?;
+        let mut result = vec![];
+        while let Some(nal) = self.retrieve_nal() {
+            result.push(nal);
+        }
+        Ok(result)
+    }
+
+    /// Drain a NAL out of the encoder. Typically not used directly,
+    /// except after `begin_drain`.
+    fn retrieve_nal(&mut self) -> Option<EncodedFrame> {
         let curr_pts = self.pts_count;
         self.pts_count += 1;
 
-        self.encoder.send_frame(&frame).unwrap();
-        retrieve_nal(&mut self.encoder, curr_pts)
-    }
+        let mut encoded_packet = AvPacket::empty();
+        let encoder_res = self.encoder.receive_packet(&mut encoded_packet);
 
-    /// Drains this encoder: returns an iterator over the
-    /// remaining NALs and comsumes this object in the process.
-    pub fn drain(mut self) -> Result<impl Iterator<Item = EncodedFrame>, AvError> {
-        self.encoder.send_eof()?;
-        Ok(FrameIterator {
-            encoder: self.encoder,
-            pts: self.pts_count,
-        })
-    }
-}
-
-fn retrieve_nal(encoder: &mut AvVideoEncoder, pts: usize) -> Option<EncodedFrame> {
-    let mut encoded_packet = AvPacket::empty();
-    let encoder_res = encoder.receive_packet(&mut encoded_packet);
-
-    match encoder_res {
-        Ok(_) => {
-            let encoded_data = encoded_packet.data();
-            if encoded_data.is_none() {
-                error!("encoder likely dropping frames!! data packet is empty");
-                None
-            } else {
-                if let Some(nal) = encoded_data {
-                    Some(EncodedFrame {
-                        nal_bytes: bytes::BytesMut::from(nal),
-                        is_keyframe: encoded_packet.is_key(),
-                        duration: encoded_packet.duration(),
-                        pts: pts as i64,
-                    })
-                } else {
+        match encoder_res {
+            Ok(_) => {
+                let encoded_data = encoded_packet.data();
+                if encoded_data.is_none() {
+                    error!("encoder likely dropping frames!! data packet is empty");
                     None
+                } else {
+                    if let Some(nal) = encoded_data {
+                        Some(EncodedFrame {
+                            nal_bytes: bytes::BytesMut::from(nal),
+                            is_keyframe: encoded_packet.is_key(),
+                            duration: encoded_packet.duration(),
+                            pts: curr_pts as i64,
+                        })
+                    } else {
+                        None
+                    }
                 }
             }
-        }
-        Err(e) => {
-            debug!("got ffmpeg encoder error: {e}");
-            None
+            Err(e) => {
+                debug!("got ffmpeg encoder error: {e}");
+                None
+            }
         }
     }
 }
