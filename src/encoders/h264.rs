@@ -42,6 +42,7 @@ impl EncoderType {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct EncoderConfig {
     pub input_width: u32,
     pub input_height: u32,
@@ -195,10 +196,26 @@ impl H264Encoder {
 
     pub fn encode(&mut self, mut frame: AvFrame) -> Option<EncodedFrame> {
         frame.set_pts(Some(self.pts_count as i64));
+        self.encoder.send_frame(&frame).unwrap();
+        self.retrieve_nal()
+    }
+
+    /// Drains and consumes this encoder
+    pub fn drain(mut self) -> Result<Vec<EncodedFrame>, AvError> {
+        self.encoder.send_eof()?;
+        let mut result = vec![];
+        while let Some(nal) = self.retrieve_nal() {
+            result.push(nal);
+        }
+        Ok(result)
+    }
+
+    /// Drain a NAL out of the encoder. Typically not used directly,
+    /// except after `begin_drain`.
+    fn retrieve_nal(&mut self) -> Option<EncodedFrame> {
         let curr_pts = self.pts_count;
         self.pts_count += 1;
 
-        self.encoder.send_frame(&frame).unwrap();
         let mut encoded_packet = AvPacket::empty();
         let encoder_res = self.encoder.receive_packet(&mut encoded_packet);
 
