@@ -18,13 +18,16 @@ async fn main() -> Result<()> {
         .with_env_filter(EnvFilter::from_default_env())
         .with_writer(std::io::stderr)
         .init();
-    let tls = moq_native::tls::Args::default().load()?;
+    let mut tls_args = moq_native::tls::Args::default();
+    tls_args.disable_verify = true;
+    let tls = tls_args.load()?;
     let quic_client = quic::Endpoint::new(quic::Config {
         bind: SocketAddr::from(([0, 0, 0, 0], 0)),
         tls
     })?;
 
     let session = quic_client.client.connect(&Url::parse("https://relay.quic.video").unwrap()).await?;
+
     let session = moq_transfork::Session::connect(session).await?;
 
     let path = moq_transfork::Path::new().push("test-zed");
@@ -38,12 +41,14 @@ async fn main() -> Result<()> {
         output_height: 414,
         bitrate: 300000, // bitrate
         // input_type: InputType::YUV420P,
-        input_type: InputType::YUYV422,
-        video_dev: String::from("/dev/video0"),
+        // input_type: InputType::YUYV422,
+        v4l_fourcc: v4l::FourCC::new(b"BGR3"),
+        input_type: InputType::BGR24,
+        video_dev: String::from("/dev/video4"),
     };
 
     let mut ffmpeg_opts = FfmpegOptions::new();
-    ffmpeg_opts.set("preset", "superfast");
+    ffmpeg_opts.push((String::from("preset"), String::from("superfast")));
 
     let mut rx_stream = V4lH264Stream::new(v4l_config, ffmpeg_opts)?;
     // let mut rx_reader = StreamReader::new(rx_stream);
