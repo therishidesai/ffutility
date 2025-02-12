@@ -14,7 +14,7 @@ use moq_karp::{BroadcastProducer, Dimensions, H264, Frame, Timestamp, Track, Tra
 
 use std::cell::Cell;
 use std::io::Read;
-use std::sync::{Arc, Mutex, mpsc::channel};
+use std::sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex, mpsc::channel};
 
 pub struct AnnexBStreamImport {
     broadcast: Arc<Mutex<BroadcastProducer>>,
@@ -34,8 +34,8 @@ impl AnnexBStreamImport {
     pub async fn init_from<T: Stream<Item = BytesMut> + Unpin>(&mut self, input: &mut T) -> Result<TrackProducer> {
         let mut ctx = Context::new();
         let mut sps: Option<SeqParameterSet> = None;
-        let found_sps = Cell::new(false);
-        let found_pps = Cell::new(false);
+        let found_sps = AtomicBool::new(false);
+        let found_pps = AtomicBool::new(false);
 
         let mut reader = AnnexBReader::accumulate(|nal: RefNal<'_>| {
             let nal_unit_type = nal.header().unwrap().nal_unit_type();
@@ -44,20 +44,20 @@ impl AnnexBStreamImport {
                     let sps_local= SeqParameterSet::from_bits(nal.rbsp_bits()).unwrap();
                     ctx.put_seq_param_set(sps_local.clone());
                     sps = Some(sps_local);
-                    found_sps.set(true);
+                    found_sps.store(true, Ordering::SeqCst);
                     NalInterest::Buffer
                 },
                 UnitType::PicParameterSet => {
                     let pps = PicParameterSet::from_bits(&ctx, nal.rbsp_bits()).unwrap();
                     ctx.put_pic_param_set(pps);
-                    found_pps.set(true);
+                    found_pps.store(true, Ordering::SeqCst);
                     NalInterest::Buffer
                 },
                 _ => NalInterest::Ignore,
             }
         });
 
-        while !found_pps.get() && !found_sps.get() {
+        while !found_pps.load(Ordering::SeqCst) && !found_sps.load(Ordering::SeqCst) {
             if let Some(buffer) = input.next().await {
                 reader.push(&buffer);
             } else {

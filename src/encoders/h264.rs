@@ -22,7 +22,9 @@ use thiserror::Error;
 
 use tracing::{debug, error};
 
-pub type FfmpegOptions<'a> = AvDictionary<'a>;
+// pub type FfmpegOptions<'a> = AvDictionary<'a>;
+// NOTE: does this have to be a tuple of Strings? Maybe CoW can help
+pub type FfmpegOptions = Vec<(String, String)>;
 pub type InputType = AvPixel;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -99,8 +101,13 @@ unsafe impl Sync for H264Encoder {}
 impl H264Encoder {
     pub fn new(
         ec: EncoderConfig,
-        extra_ffmpeg_opts: FfmpegOptions,
+        extra_ffmpeg_opts: &FfmpegOptions,
     ) -> Result<Self, H264EncoderError> {
+        let mut extra_opts = AvDictionary::new();
+        for opt in extra_ffmpeg_opts {
+            extra_opts.set(opt.0.as_str(), opt.1.as_str());
+        }
+
         let ffmpeg_codec = ffmpeg::encoder::find_by_name(ec.enc_type.as_str()).unwrap();
         let ffmpeg_context = codec_context_as(&ffmpeg_codec)?;
         let mut ffmpeg_vid_encoder = ffmpeg_context.encoder().video().unwrap();
@@ -116,7 +123,7 @@ impl H264Encoder {
         if let Some(gop) = ec.gop {
             ffmpeg_vid_encoder.set_gop(gop);
         }
-        let encoder = ffmpeg_vid_encoder.open_with(extra_ffmpeg_opts)?;
+        let encoder = ffmpeg_vid_encoder.open_with(extra_opts)?;
 
         let scaler = AvScalingContext::get(
             ec.input_type,
