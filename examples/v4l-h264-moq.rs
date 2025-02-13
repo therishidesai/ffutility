@@ -26,7 +26,8 @@ async fn main() -> Result<()> {
         tls
     })?;
 
-    let session = quic_client.client.connect(&Url::parse("https://relay.quic.video").unwrap()).await?;
+    // let session = quic_client.client.connect(&Url::parse("https://relay.quic.video").unwrap()).await?;
+    let session = quic_client.client.connect(Url::parse("https://sartv-dev-relay.saronic.vpn:4443").unwrap()).await?;
 
     let session = moq_transfork::Session::connect(session).await?;
 

@@ -73,7 +73,7 @@ impl AnnexBStreamImport {
             };
             self.codec = Some(codec.clone());
 
-            let description = BytesMut::new();
+            // let description = BytesMut::new();
             let track = Video {
                 track: Track { name: String::from("video0"), priority: 2 },
                 resolution: Dimensions {
@@ -81,12 +81,12 @@ impl AnnexBStreamImport {
                     height: 720,
                 },
                 codec: codec.into(),
-                description: description.freeze(),
+                description: None,
                 bitrate: None,
             };
 
             let mut broadcast = self.broadcast.lock().unwrap();
-            let track = broadcast.video(track).unwrap();
+            let track = broadcast.publish_video(track).unwrap();
             self.ctx = Some(ctx);
 
             Ok(track)
