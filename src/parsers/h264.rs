@@ -20,14 +20,18 @@ pub struct AnnexBStreamImport {
     broadcast: Arc<Mutex<BroadcastProducer>>,
     codec: Option<H264>,
     ctx: Option<Context>,
+    width: u32,
+    height: u32,
 }
 
 impl AnnexBStreamImport {
-    pub fn new(broadcast: Arc<Mutex<BroadcastProducer>>) -> Self {
+    pub fn new(broadcast: Arc<Mutex<BroadcastProducer>>, width: u32, height: u32) -> Self {
         Self {
             broadcast,
             codec: None,
             ctx: None,
+            width,
+            height,
         }
     }
 
@@ -77,8 +81,8 @@ impl AnnexBStreamImport {
             let track = Video {
                 track: Track { name: String::from("video0"), priority: 2 },
                 resolution: Dimensions {
-                    width: 2560,
-                    height: 720,
+                    width: self.width,
+                    height: self.height,
                 },
                 codec: codec.into(),
                 description: None,

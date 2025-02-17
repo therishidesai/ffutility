@@ -26,8 +26,8 @@ async fn main() -> Result<()> {
         tls
     })?;
 
-    // let session = quic_client.client.connect(&Url::parse("https://relay.quic.video").unwrap()).await?;
-    let session = quic_client.client.connect(Url::parse("https://sartv-dev-relay.saronic.vpn:4443").unwrap()).await?;
+    let session = quic_client.client.connect(Url::parse("https://relay.quic.video").unwrap()).await?;
+
 
     let session = moq_transfork::Session::connect(session).await?;
 
@@ -35,7 +35,7 @@ async fn main() -> Result<()> {
 
     let broadcast = BroadcastProducer::new(session.clone(), path)?;
 
-    let mut annexb_import = AnnexBStreamImport::new(Arc::new(Mutex::new(broadcast)));
+    let mut annexb_import = AnnexBStreamImport::new(Arc::new(Mutex::new(broadcast)), 736, 414);
 
     let v4l_config = V4lH264Config {
         output_width: 736,
