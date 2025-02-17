@@ -148,7 +148,7 @@ impl H264Encoder {
     }
 
     #[cfg(feature = "opencv")]
-    pub fn encode_mat(&mut self, input: &Mat) -> Option<EncodedFrame> {
+    pub fn encode_mat(&mut self, input: &Mat) -> (i64, Option<EncodedFrame>) {
         let width = input.cols();
         let height = input.rows();
         let mut out_frame = AvFrame::new(
@@ -171,7 +171,7 @@ impl H264Encoder {
         self.encode(out_frame)
     }
 
-    pub fn encode_raw(&mut self, input: &[u8]) -> Option<EncodedFrame> {
+    pub fn encode_raw(&mut self, input: &[u8]) -> (i64, Option<EncodedFrame>) {
         debug!("input len: {}", input.len());
         let mut out_frame = AvFrame::new(
             AvPixel::YUV420P,
@@ -201,10 +201,11 @@ impl H264Encoder {
         self.encode(out_frame)
     }
 
-    pub fn encode(&mut self, mut frame: AvFrame) -> Option<EncodedFrame> {
-        frame.set_pts(Some(self.pts_count as i64));
+    pub fn encode(&mut self, mut frame: AvFrame) -> (i64, Option<EncodedFrame>) {
+        let pts = self.pts_count as i64;
+        frame.set_pts(Some(pts));
         self.encoder.send_frame(&frame).unwrap();
-        self.retrieve_nal()
+        (pts, self.retrieve_nal())
     }
 
     /// Drains and consumes this encoder

@@ -81,7 +81,7 @@ impl V4lH264Stream {
                 let (m_buf, meta) = stream.next().unwrap();
                 let bytesused = meta.bytesused as usize;
                 // debug!("V4L bytesused: {}", meta.bytesused);
-                if let Some(encoded_frame) = encoder.encode_raw(&m_buf[..bytesused]) {
+                if let (_, Some(encoded_frame)) = encoder.encode_raw(&m_buf[..bytesused]) {
                     tx.blocking_send(encoded_frame.nal_bytes).unwrap();
                 }
             }
