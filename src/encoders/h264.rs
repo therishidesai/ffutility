@@ -207,8 +207,8 @@ impl H264Encoder {
     }
 
     pub fn encode(&mut self, pts: Option<i64>, mut frame: AvFrame) -> Result<Option<EncodedFrame>, H264EncoderError> {
-        if let Some(prev_pts) = self.prev_pts {
-            if let Some(curr_pts) = pts {
+        if let Some(curr_pts) = pts {
+            if let Some(prev_pts) = self.prev_pts {
                 if prev_pts > curr_pts {
                     return Err(H264EncoderError::PTSNotMonotonic {
                         prev_pts,
@@ -216,10 +216,12 @@ impl H264Encoder {
                     })
                 }
             }
+            self.prev_pts = pts;
+        } else {
+            *self.prev_pts.get_or_insert(0) += 1;
         }
 
         frame.set_pts(self.prev_pts);
-        self.prev_pts = pts;
         self.encoder.send_frame(&frame).unwrap();
         self.retrieve_nal()
     }
