@@ -74,6 +74,7 @@ impl V4lH264Stream {
                 input_type: cfg.input_type,
             };
 
+            let mut pts = 0;
             let mut encoder = H264Encoder::new(ec, &ffmpeg_opts).unwrap();
             
             loop {
@@ -81,9 +82,10 @@ impl V4lH264Stream {
                 let (m_buf, meta) = stream.next().unwrap();
                 let bytesused = meta.bytesused as usize;
                 // debug!("V4L bytesused: {}", meta.bytesused);
-                if let Some(encoded_frame) = encoder.encode_raw(&m_buf[..bytesused]) {
+                if let Some(encoded_frame) = encoder.encode_raw(Some(pts), &m_buf[..bytesused]).unwrap() {
                     tx.blocking_send(encoded_frame.nal_bytes).unwrap();
                 }
+                pts += 1;
             }
         });
 

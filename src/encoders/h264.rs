@@ -60,6 +60,11 @@ pub struct EncoderConfig {
 
 #[derive(Error, Debug)]
 pub enum H264EncoderError {
+    #[error("PTS was not monotonically increasing: previous PTS: {prev_pts} > PTS: {curr_pts}")]
+    PTSNotMonotonic {
+        prev_pts: i64,
+        curr_pts: i64
+    },
     #[error("ffmpeg error: ")]
     FfmpegError(#[from] AvError),
     #[error("failed to alloc avcodec context")]
@@ -69,7 +74,7 @@ pub enum H264EncoderError {
 pub struct H264Encoder {
     encoder: AvVideoEncoder,
     scaler: AvScalingContext,
-    pts_count: usize,
+    prev_pts: Option<i64>,
     input_type: AvPixel,
     input_width: u32,
     input_height: u32,
@@ -92,7 +97,7 @@ pub struct EncodedFrame {
     pub nal_bytes: bytes::BytesMut,
     pub is_keyframe: bool,
     pub duration: i64,
-    pub pts: i64,
+    pub pts: Option<i64>,
 }
 
 unsafe impl Send for H264Encoder {}
@@ -138,7 +143,7 @@ impl H264Encoder {
         Ok(Self {
             encoder,
             scaler,
-            pts_count: 0,
+            prev_pts: None,
             input_type: ec.input_type,
             input_width: ec.input_width,
             input_height: ec.input_height,
@@ -148,7 +153,7 @@ impl H264Encoder {
     }
 
     #[cfg(feature = "opencv")]
-    pub fn encode_mat(&mut self, input: &Mat) -> Option<EncodedFrame> {
+    pub fn encode_mat(&mut self, pts: Option<i64>, input: &Mat) -> Result<Option<EncodedFrame>, H264EncoderError> {
         let width = input.cols();
         let height = input.rows();
         let mut out_frame = AvFrame::new(
@@ -168,10 +173,10 @@ impl H264Encoder {
             .copy_from_slice(input.data_bytes().unwrap());
 
         self.scaler.run(&in_frame, &mut out_frame).unwrap();
-        self.encode(out_frame)
+        self.encode(pts, out_frame)
     }
 
-    pub fn encode_raw(&mut self, input: &[u8]) -> Option<EncodedFrame> {
+    pub fn encode_raw(&mut self, pts: Option<i64>, input: &[u8]) -> Result<Option<EncodedFrame>, H264EncoderError> {
         debug!("input len: {}", input.len());
         let mut out_frame = AvFrame::new(
             AvPixel::YUV420P,
@@ -198,20 +203,32 @@ impl H264Encoder {
             in_frame.data_mut(0).copy_from_slice(input);
         }
         self.scaler.run(&in_frame, &mut out_frame).unwrap();
-        self.encode(out_frame)
+        self.encode(pts, out_frame)
     }
 
-    pub fn encode(&mut self, mut frame: AvFrame) -> Option<EncodedFrame> {
-        frame.set_pts(Some(self.pts_count as i64));
+    pub fn encode(&mut self, pts: Option<i64>, mut frame: AvFrame) -> Result<Option<EncodedFrame>, H264EncoderError> {
+        if let Some(prev_pts) = self.prev_pts {
+            if let Some(curr_pts) = pts {
+                if prev_pts > curr_pts {
+                    return Err(H264EncoderError::PTSNotMonotonic {
+                        prev_pts,
+                        curr_pts
+                    })
+                }
+            }
+        }
+
+        frame.set_pts(pts);
+        self.prev_pts = pts;
         self.encoder.send_frame(&frame).unwrap();
         self.retrieve_nal()
     }
 
     /// Drains and consumes this encoder
-    pub fn drain(mut self) -> Result<Vec<EncodedFrame>, AvError> {
+    pub fn drain(mut self) -> Result<Vec<EncodedFrame>, H264EncoderError> {
         self.encoder.send_eof()?;
         let mut result = vec![];
-        while let Some(nal) = self.retrieve_nal() {
+        while let Some(nal) = self.retrieve_nal()? {
             result.push(nal);
         }
         Ok(result)
@@ -219,10 +236,7 @@ impl H264Encoder {
 
     /// Drain a NAL out of the encoder. Typically not used directly,
     /// except after `begin_drain`.
-    fn retrieve_nal(&mut self) -> Option<EncodedFrame> {
-        let curr_pts = self.pts_count;
-        self.pts_count += 1;
-
+    fn retrieve_nal(&mut self) -> Result<Option<EncodedFrame>, H264EncoderError> {
         let mut encoded_packet = AvPacket::empty();
         let encoder_res = self.encoder.receive_packet(&mut encoded_packet);
 
@@ -231,23 +245,24 @@ impl H264Encoder {
                 let encoded_data = encoded_packet.data();
                 if encoded_data.is_none() {
                     error!("encoder likely dropping frames!! data packet is empty");
-                    None
+                    Ok(None)
                 } else {
                     if let Some(nal) = encoded_data {
-                        Some(EncodedFrame {
+                        Ok(Some(EncodedFrame {
                             nal_bytes: bytes::BytesMut::from(nal),
                             is_keyframe: encoded_packet.is_key(),
                             duration: encoded_packet.duration(),
-                            pts: curr_pts as i64,
-                        })
+                            pts: encoded_packet.pts(),
+                        }))
                     } else {
-                        None
+                        Ok(None)
                     }
                 }
             }
             Err(e) => {
                 debug!("got ffmpeg encoder error: {e}");
-                None
+                // TODO: better error handling here
+                Ok(None)
             }
         }
     }
