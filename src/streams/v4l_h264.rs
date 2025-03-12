@@ -38,7 +38,7 @@ impl V4lH264Stream {
             // TODO: better error handling, should close the channel correctly instead of exploding
             loop {
                 // block until the v4l_device is up
-                let v4l_dev = Device::with_path(&cfg.video_dev)
+                let v4l_dev = Device::with_args(&cfg.video_dev, libc::O_RDONLY | libc::O_NONBLOCK)
                     .expect("Failed to open v4l device. Device may not exist.");
                 let formats = v4l_dev.enum_formats().expect("Failed to get v4l formats.");
 
@@ -56,7 +56,7 @@ impl V4lH264Stream {
             }
 
 
-            let video_dev = Device::with_path(&cfg.video_dev).unwrap();
+            let video_dev = Device::with_args(&cfg.video_dev, libc::O_RDONLY | libc::O_NONBLOCK).unwrap();
             let mut stream = MmapStream::new(&video_dev, Type::VideoCapture).unwrap();
 
             let format = video_dev.format().unwrap();

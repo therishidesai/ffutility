@@ -17,6 +17,7 @@ bytes = "1.8.0"
 ffmpeg-next = "7.1.0"
 futures = "0.3.31"
 h264-reader = "0.8.0"
+libc = "^0.2"
 moq-karp = "0.13.0"
 moq-native = "0.6.5"
 moq-transfork = "0.10.0"
@@ -26,7 +27,8 @@ thiserror = "2.0.3"
 tokio = { version = "1.41.1", features = ["full"] }
 tokio-stream = { version = "0.1.16", features = ["full"] }
 tracing = "0.1.40"
-v4l = "0.14.0"
+v4l = { git = "https://github.com/therishidesai/libv4l-rs", branch = "rdesai/read-only-device" }
+# v4l = "0.14.0"
 
 # [patch.crates-io]
 # h264-reader = { git = "https://github.com/therishidesai/h264-reader", branch = "patch/remove-lfs" }
