@@ -16,6 +16,8 @@ use std::cell::Cell;
 use std::io::Read;
 use std::sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex, mpsc::channel};
 
+use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
+
 pub struct AnnexBStreamImport {
     broadcast: Arc<Mutex<BroadcastProducer>>,
     codec: Option<H264>,
@@ -35,7 +37,7 @@ impl AnnexBStreamImport {
         }
     }
 
-    pub async fn init_from<T: Stream<Item = BytesMut> + Unpin>(&mut self, input: &mut T) -> Result<TrackProducer> {
+    pub async fn init_from<T: Stream<Item = Result<BytesMut, BroadcastStreamRecvError>> + Unpin>(&mut self, input: &mut T) -> Result<TrackProducer> {
         let mut ctx = Context::new();
         let mut sps: Option<SeqParameterSet> = None;
         let found_sps = AtomicBool::new(false);
@@ -63,7 +65,7 @@ impl AnnexBStreamImport {
 
         while !found_pps.load(Ordering::SeqCst) && !found_sps.load(Ordering::SeqCst) {
             if let Some(buffer) = input.next().await {
-                reader.push(&buffer);
+                reader.push(&(buffer?));
             } else {
                 break
             }
@@ -101,7 +103,7 @@ impl AnnexBStreamImport {
 
     }
 
-    pub async fn read_from<T: Stream<Item = BytesMut> + Unpin>(&mut self, input: &mut T, track: &mut TrackProducer) -> Result<()> {
+    pub async fn read_from<T: Stream<Item = Result<BytesMut, BroadcastStreamRecvError>> + Unpin>(&mut self, input: &mut T, track: &mut TrackProducer) -> Result<()> {
         if self.ctx.is_none() || self.codec.is_none() {
             bail!("AnnexBImport not initialized");
         }
@@ -251,7 +253,7 @@ impl AnnexBStreamImport {
         });
         
         while let Some(buffer) = input.next().await {
-            reader.push(&buffer);
+            reader.push(&(buffer?));
             loop {
                 match frame_rx.try_recv() {
                     Ok(f) => {

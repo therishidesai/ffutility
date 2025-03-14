@@ -4,9 +4,7 @@ use bytes::BytesMut;
 
 use crate::encoders::{EncoderConfig, EncoderType, FfmpegOptions, H264Encoder, InputType};
 
-use tokio::sync::mpsc;
-
-use tokio_stream::wrappers::ReceiverStream;
+use tokio::sync::{broadcast, broadcast::Receiver};
 
 use tracing::debug;
 
@@ -31,8 +29,8 @@ pub struct V4lH264Stream {
 }
 
 impl V4lH264Stream {
-    pub fn new(cfg: V4lH264Config, ffmpeg_opts: FfmpegOptions) -> Result<ReceiverStream<BytesMut>> {
-        let (tx, rx) = mpsc::channel::<BytesMut>(10);
+    pub fn new(cfg: V4lH264Config, ffmpeg_opts: FfmpegOptions) -> Result<Receiver<BytesMut>> {
+        let (tx, rx) = broadcast::channel::<BytesMut>(10);
 
         std::thread::spawn(move || {
             // TODO: better error handling, should close the channel correctly instead of exploding
@@ -83,12 +81,12 @@ impl V4lH264Stream {
                 let bytesused = meta.bytesused as usize;
                 // debug!("V4L bytesused: {}", meta.bytesused);
                 if let Some(encoded_frame) = encoder.encode_raw(Some(pts), &m_buf[..bytesused]).unwrap() {
-                    tx.blocking_send(encoded_frame.nal_bytes).unwrap();
+                    tx.send(encoded_frame.nal_bytes).unwrap();
                 }
                 pts += 1;
             }
         });
 
-        Ok(ReceiverStream::from(rx))
+        Ok(rx)
     }
 }

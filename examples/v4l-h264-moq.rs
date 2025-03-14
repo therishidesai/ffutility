@@ -8,6 +8,8 @@ use moq_native::quic;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 
+use tokio_stream::wrappers::BroadcastStream;
+
 use tracing_subscriber::EnvFilter;
 
 use url::Url;
@@ -27,7 +29,6 @@ async fn main() -> Result<()> {
     })?;
 
     let session = quic_client.client.connect(Url::parse("https://relay.quic.video").unwrap()).await?;
-
 
     let session = moq_transfork::Session::connect(session).await?;
 
@@ -51,7 +52,7 @@ async fn main() -> Result<()> {
     let mut ffmpeg_opts = FfmpegOptions::new();
     ffmpeg_opts.push((String::from("preset"), String::from("superfast")));
 
-    let mut rx_stream = V4lH264Stream::new(v4l_config, ffmpeg_opts)?;
+    let mut rx_stream = BroadcastStream::from(V4lH264Stream::new(v4l_config, ffmpeg_opts)?);
     // let mut rx_reader = StreamReader::new(rx_stream);
 
     let mut track = annexb_import.init_from(&mut rx_stream).await?;
