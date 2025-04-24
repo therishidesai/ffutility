@@ -33,6 +33,10 @@ pub enum EncoderType {
     X264,
     #[serde(rename = "h264_nvenc")]
     H264Nvenc,
+    #[serde(rename = "h264_nvmpi")]
+    // NOTE: Only for Jetson NVENC systems. Will not work on any other
+    // systems
+    H264Nvmpi,
 }
 
 impl EncoderType {
@@ -40,6 +44,7 @@ impl EncoderType {
         match self {
             Self::X264 => "libx264",
             Self::H264Nvenc => "h264_nvenc",
+            Self::H264Nvmpi => "h264_nvmpi",
         }
     }
 }
