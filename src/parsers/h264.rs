@@ -26,14 +26,14 @@ pub struct AnnexBStreamImport {
 }
 
 impl AnnexBStreamImport {
-    pub fn new(broadcast: Arc<Mutex<BroadcastProducer>>, width: u32, height: u32) -> Self {
+    pub fn new(broadcast: Arc<Mutex<BroadcastProducer>>, width: u32, height: u32, pause_flag: Arc<AtomicBool>) -> Self {
         Self {
             broadcast,
             codec: None,
             ctx: None,
             width,
             height,
-            pause_flag: Arc::new(AtomicBool::new(false)),
+            pause_flag,
         }
     }
 
@@ -255,28 +255,19 @@ impl AnnexBStreamImport {
         while let Some(buffer) = input.next().await {
             reader.push(&buffer);
 
-            while self.pause_flag.load(Ordering::Relaxed) {
-                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-            }
-            
-            loop {
-                match frame_rx.try_recv() {
-                    Ok(f) => {
-                        track.write(f);
-                    },
-                    Err(std::sync::mpsc::TryRecvError::Empty) => break,
-                    Err(_) => panic!("frame_rx channel disconnected"),
+            if !self.pause_flag.load(Ordering::Relaxed) {
+                loop {
+                    match frame_rx.try_recv() {
+                        Ok(f) => {
+                            track.write(f);
+                        },
+                        Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                        Err(_) => panic!("frame_rx channel disconnected"),
+                    }
                 }
             }
         }
 
         Ok(())
-    }
-    pub fn pause(&self) {
-        self.pause_flag.store(true, Ordering::Relaxed);
-    }
-
-    pub fn resume(&self) {
-        self.pause_flag.store(false, Ordering::Relaxed);
     }
 }
