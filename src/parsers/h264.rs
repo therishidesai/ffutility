@@ -22,6 +22,7 @@ pub struct AnnexBStreamImport {
     ctx: Option<Context>,
     width: u32,
     height: u32,
+    pause_flag: Arc<AtomicBool>
 }
 
 impl AnnexBStreamImport {
@@ -32,6 +33,7 @@ impl AnnexBStreamImport {
             ctx: None,
             width,
             height,
+            pause_flag: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -252,6 +254,11 @@ impl AnnexBStreamImport {
         
         while let Some(buffer) = input.next().await {
             reader.push(&buffer);
+
+            while self.pause_flag.load(Ordering::Relaxed) {
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            }
+            
             loop {
                 match frame_rx.try_recv() {
                     Ok(f) => {
@@ -264,5 +271,12 @@ impl AnnexBStreamImport {
         }
 
         Ok(())
+    }
+    pub fn pause(&self) {
+        self.pause_flag.store(true, Ordering::Relaxed);
+    }
+
+    pub fn resume(&self) {
+        self.pause_flag.store(false, Ordering::Relaxed);
     }
 }
