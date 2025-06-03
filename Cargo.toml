@@ -10,6 +10,7 @@ readme = "README.md"
 
 [features]
 opencv = ["dep:opencv"]
+v4l = ["dep:v4l"]
 
 [dependencies]
 anyhow = "1.0.93"
@@ -26,7 +27,7 @@ thiserror = "2.0.3"
 tokio = { version = "1.41.1", features = ["full"] }
 tokio-stream = { version = "0.1.16", features = ["full"] }
 tracing = "0.1.40"
-v4l = "0.14.0"
+v4l = { version = "0.14.0", optional = true }
 
 # [patch.crates-io]
 # h264-reader = { git = "https://github.com/therishidesai/h264-reader", branch = "patch/remove-lfs" }

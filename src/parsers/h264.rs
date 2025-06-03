@@ -13,6 +13,7 @@ use h264_reader::push::NalInterest;
 use moq_karp::{BroadcastProducer, Dimensions, H264, Frame, Timestamp, Track, TrackProducer, Video};
 
 use std::cell::Cell;
+use std::hash::Hasher;
 use std::io::Read;
 use std::sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex, mpsc::channel};
 
@@ -22,7 +23,7 @@ pub struct AnnexBStreamImport {
     ctx: Option<Context>,
     width: u32,
     height: u32,
-    pause_flag: Arc<AtomicBool>
+    pause_flag: Arc<AtomicBool>,
 }
 
 impl AnnexBStreamImport {
@@ -251,11 +252,10 @@ impl AnnexBStreamImport {
                 },
             }
         });
-        
+
         while let Some(buffer) = input.next().await {
             reader.push(&buffer);
-
-            if !self.pause_flag.load(Ordering::Relaxed) {
+            if !self.pause_flag.load(Ordering::Acquire) {
                 loop {
                     match frame_rx.try_recv() {
                         Ok(f) => {

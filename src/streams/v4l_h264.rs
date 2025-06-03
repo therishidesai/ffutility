@@ -1,3 +1,5 @@
+#![cfg(all(target_os = "linux", feature = "v4l"))]
+
 use anyhow::Result;
 
 use bytes::BytesMut;
