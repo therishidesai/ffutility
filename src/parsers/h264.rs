@@ -13,8 +13,40 @@ use h264_reader::push::NalInterest;
 use moq_karp::{BroadcastProducer, Dimensions, H264, Frame, Timestamp, Track, TrackProducer, Video};
 
 use std::cell::Cell;
-use std::io::Read;
-use std::sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex, mpsc::channel};
+use std::io::{self, Read};
+use std::sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex, mpsc::{channel, SendError}};
+
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum H264ParserError {
+    #[error("NAL header error: {0}")]
+    NalHeaderError(String),
+    
+    #[error("SPS parse error: {0}")]
+    SpsParseError(String),
+    
+    #[error("PPS parse error: {0}")]
+    PpsParseError(String),
+    
+    #[error("Slice header parse error: {0}")]
+    SliceHeaderError(String),
+    
+    #[error("IO error: {0}")]
+    IoError(#[from] io::Error),
+    
+    #[error("Lock error: {0}")]
+    LockError(String),
+    
+    #[error("Channel error: {0}")]
+    ChannelError(String),
+    
+    #[error("Missing context: parser not initialized")]
+    MissingContext,
+    
+    #[error("Broadcast error: {0}")]
+    BroadcastError(String),
+}
 
 pub struct AnnexBStreamImport {
     broadcast: Arc<Mutex<BroadcastProducer>>,
@@ -42,20 +74,46 @@ impl AnnexBStreamImport {
         let found_pps = AtomicBool::new(false);
 
         let mut reader = AnnexBReader::accumulate(|nal: RefNal<'_>| {
-            let nal_unit_type = nal.header().unwrap().nal_unit_type();
+            // Get NAL header
+            let header = match nal.header() {
+                Ok(h) => h,
+                Err(e) => {
+                    // Just ignore this NAL and continue
+                    return NalInterest::Ignore;
+                }
+            };
+            
+            let nal_unit_type = header.nal_unit_type();
+            
             match nal_unit_type {
                 UnitType::SeqParameterSet => {
-                    let sps_local= SeqParameterSet::from_bits(nal.rbsp_bits()).unwrap();
-                    ctx.put_seq_param_set(sps_local.clone());
-                    sps = Some(sps_local);
-                    found_sps.store(true, Ordering::SeqCst);
-                    NalInterest::Buffer
+                    match SeqParameterSet::from_bits(nal.rbsp_bits()) {
+                        Ok(sps_local) => {
+                            ctx.put_seq_param_set(sps_local.clone());
+                            sps = Some(sps_local);
+                            found_sps.store(true, Ordering::SeqCst);
+                            NalInterest::Buffer
+                        },
+                        Err(e) => {
+                            // Log error but continue parsing
+                            eprintln!("Error parsing SPS: {:?}", e);
+                            NalInterest::Ignore
+                        }
+                    }
                 },
                 UnitType::PicParameterSet => {
-                    let pps = PicParameterSet::from_bits(&ctx, nal.rbsp_bits()).unwrap();
-                    ctx.put_pic_param_set(pps);
-                    found_pps.store(true, Ordering::SeqCst);
-                    NalInterest::Buffer
+                    match PicParameterSet::from_bits(&ctx, nal.rbsp_bits()) {
+                        Ok(pps) => {
+                            ctx.put_pic_param_set(pps);
+                            found_pps.store(true, Ordering::SeqCst);
+                            NalInterest::Buffer
+                        },
+                        Err(e) => {
+                            // Log error but continue parsing
+                            eprintln!("Error parsing PPS: {:?}", e);
+                            NalInterest::Ignore
+                        }
+                    }
                 },
                 _ => NalInterest::Ignore,
             }
@@ -77,7 +135,6 @@ impl AnnexBStreamImport {
             };
             self.codec = Some(codec.clone());
 
-            // let description = BytesMut::new();
             let track = Video {
                 track: Track { name: String::from("video0"), priority: 2 },
                 resolution: Dimensions {
@@ -89,16 +146,24 @@ impl AnnexBStreamImport {
                 bitrate: None,
             };
 
-            let mut broadcast = self.broadcast.lock().unwrap();
-            let track = broadcast.publish_video(track).unwrap();
+            // Get broadcast lock
+            let mut broadcast = match self.broadcast.lock() {
+                Ok(b) => b,
+                Err(e) => bail!("Failed to lock broadcast mutex: {}", e),
+            };
+            
+            // Publish the video track
+            let track = match broadcast.publish_video(track) {
+                Ok(t) => t,
+                Err(e) => bail!("Failed to publish video track: {}", e),
+            };
+            
             self.ctx = Some(ctx);
 
             Ok(track)
         } else {
             bail!("Failed to find valid SPS in input!");
         }
-
-
     }
 
     pub async fn read_from<T: Stream<Item = BytesMut> + Unpin>(&mut self, input: &mut T, track: &mut TrackProducer) -> Result<()> {
@@ -108,7 +173,9 @@ impl AnnexBStreamImport {
 
         let now = std::time::Instant::now();
 
-        let ctx = self.ctx.as_ref().unwrap();
+        let ctx = self.ctx.as_ref()
+            .ok_or_else(|| H264ParserError::MissingContext)?;
+            
         // NOTE: Have to use a sync channel since I want to mutate
         // both in the AnnexBReader accumulate closure and out of the
         // closure. There is probably a better way of doing this. The
@@ -121,40 +188,28 @@ impl AnnexBStreamImport {
         let mut first_keyframe = false;
 
         let mut reader = AnnexBReader::accumulate(|nal: RefNal<'_>| {
-            let nal_unit_type = nal.header().unwrap().nal_unit_type();
+            // Get NAL header
+            let header = match nal.header() {
+                Ok(h) => h,
+                Err(_) => return NalInterest::Ignore,
+            };
+            
+            let nal_unit_type = header.nal_unit_type();
+            
             match nal_unit_type {
                 UnitType::PicParameterSet => {
                     if nal.is_complete() {
-                        let mut nal_reader = nal.reader();
-                        let mut full_nal_buf = BytesMut::new();
-                        let mut buf = [0u8; 1024];
-                        loop {
-                            let n = nal_reader.read(&mut buf).unwrap();
-                            if n == 0 {
-                                break
-                            } else {
-                                full_nal_buf.extend_from_slice(&buf);
-                            }
+                        if let Some(nal_bytes) = read_nal_bytes(nal) {
+                            pps.set(nal_bytes);
                         }
-                        pps.set(full_nal_buf);
                     }
                     NalInterest::Buffer
                 }
                 UnitType::SeqParameterSet => {
                     if nal.is_complete() {
-                        let mut nal_reader = nal.reader();
-                        let mut full_nal_buf = BytesMut::new();
-                        let mut buf = [0u8; 1024];
-                        loop {
-                            let n = nal_reader.read(&mut buf).unwrap();
-                            if n == 0 {
-                                break
-                            } else {
-                                full_nal_buf.extend_from_slice(&buf);
-                            }
+                        if let Some(nal_bytes) = read_nal_bytes(nal) {
+                            sps.set(nal_bytes);
                         }
-
-                        sps.set(full_nal_buf);
                     }
                     NalInterest::Buffer
                 },
@@ -162,47 +217,53 @@ impl AnnexBStreamImport {
                     if nal.is_complete() && first_keyframe {
                         let ts = now.elapsed().as_micros();
 
-                        let slice_header = SliceHeader::from_bits(&ctx, &mut nal.rbsp_bits(), nal.header().unwrap()).unwrap().0;
+                        // Parse slice header
+                        let slice_header_result = match nal.header() {
+                            Ok(h) => SliceHeader::from_bits(&ctx, &mut nal.rbsp_bits(), h),
+                            Err(_) => return NalInterest::Ignore,
+                        };
+                        
+                        let slice_header = match slice_header_result {
+                            Ok((header, _)) => header,
+                            Err(_) => return NalInterest::Ignore,
+                        };
+                        
                         let keyframe = slice_header.slice_type.family == SliceFamily::I;
 
-                        let mut nal_reader = nal.reader();
-                        let mut full_nal_buf = BytesMut::new();
-                        let mut buf = [0u8; 1024];
-                        loop {
-                            let n = nal_reader.read(&mut buf).unwrap();
-                            if n == 0 {
-                                break
-                            } else {
-                                full_nal_buf.extend_from_slice(&buf);
+                        if let Some(full_nal_buf) = read_nal_bytes(nal) {
+                            if !keyframe {
+                                let mut payload = BytesMut::new();
+                                payload.extend_from_slice(&[0u8, 0u8, 0u8, 1u8]);
+                                payload.extend_from_slice(&full_nal_buf);
+                                let frame = Frame {
+                                    timestamp: Timestamp::from_micros(ts as u64),
+                                    keyframe,
+                                    payload: payload.freeze(),
+                                };
+                                
+                                if let Err(e) = frame_tx.send(frame) {
+                                    eprintln!("Failed to send frame: {:?}", e);
+                                }
+                            } else if keyframe && !pps.get_mut().is_empty() && !sps.get_mut().is_empty() {
+                                let sps = sps.get_mut();
+                                let pps = pps.get_mut();
+                                let mut payload = BytesMut::new();
+                                payload.extend_from_slice(&[0u8, 0u8, 0u8, 1u8]);
+                                payload.extend_from_slice(&sps);
+                                payload.extend_from_slice(&[0u8, 0u8, 0u8, 1u8]);
+                                payload.extend_from_slice(&pps);
+                                payload.extend_from_slice(&[0u8, 0u8, 0u8, 1u8]);
+                                payload.extend_from_slice(&full_nal_buf);
+                                let frame = Frame {
+                                    timestamp: Timestamp::from_micros(ts as u64),
+                                    keyframe,
+                                    payload: payload.freeze(),
+                                };
+                                
+                                if let Err(e) = frame_tx.send(frame) {
+                                    eprintln!("Failed to send frame: {:?}", e);
+                                }
                             }
-                        }
-
-                        if !keyframe {
-                            let mut payload = BytesMut::new();
-                            payload.extend_from_slice(&[0u8, 0u8, 0u8, 1u8]);
-                            payload.extend_from_slice(&full_nal_buf);
-                            let frame = Frame {
-                                timestamp: Timestamp::from_micros(ts as u64),
-                                keyframe,
-                                payload: payload.freeze(),
-                            };
-                            frame_tx.send(frame).unwrap();
-                        } else if keyframe && !pps.get_mut().is_empty() && !sps.get_mut().is_empty() {
-                            let sps = sps.get_mut();
-                            let pps = pps.get_mut();
-                            let mut payload = BytesMut::new();
-                            payload.extend_from_slice(&[0u8, 0u8, 0u8, 1u8]);
-                            payload.extend_from_slice(&sps);
-                            payload.extend_from_slice(&[0u8, 0u8, 0u8, 1u8]);
-                            payload.extend_from_slice(&pps);
-                            payload.extend_from_slice(&[0u8, 0u8, 0u8, 1u8]);
-                            payload.extend_from_slice(&full_nal_buf);
-                            let frame = Frame {
-                                timestamp: Timestamp::from_micros(ts as u64),
-                                keyframe,
-                                payload: payload.freeze(),
-                            };
-                            frame_tx.send(frame).unwrap();
                         }
                     }
                     NalInterest::Buffer
@@ -213,34 +274,28 @@ impl AnnexBStreamImport {
                             first_keyframe = true;
                         }
                         let ts = now.elapsed().as_micros();
-                        let mut nal_reader = nal.reader();
-                        let mut full_nal_buf = BytesMut::new();
-                        let mut buf = [0u8; 1024];
-                        loop {
-                            let n = nal_reader.read(&mut buf).unwrap();
-                            if n == 0 {
-                                break
-                            } else {
-                                full_nal_buf.extend_from_slice(&buf);
+                        
+                        if let Some(full_nal_buf) = read_nal_bytes(nal) {
+                            let sps = sps.get_mut();
+                            let pps = pps.get_mut();
+                            let mut payload = BytesMut::new();
+                            payload.extend_from_slice(&[0u8, 0u8, 0u8, 1u8]);
+                            payload.extend_from_slice(&sps);
+                            payload.extend_from_slice(&[0u8, 0u8, 0u8, 1u8]);
+                            payload.extend_from_slice(&pps);
+                            payload.extend_from_slice(&[0u8, 0u8, 0u8, 1u8]);
+                            payload.extend_from_slice(&full_nal_buf);
+
+                            let frame = Frame {
+                                timestamp: Timestamp::from_micros(ts as u64),
+                                keyframe: true,
+                                payload: payload.freeze(),
+                            };
+                            
+                            if let Err(e) = frame_tx.send(frame) {
+                                eprintln!("Failed to send frame: {:?}", e);
                             }
                         }
-
-                        let sps = sps.get_mut();
-                        let pps = pps.get_mut();
-                        let mut payload = BytesMut::new();
-                        payload.extend_from_slice(&[0u8, 0u8, 0u8, 1u8]);
-                        payload.extend_from_slice(&sps);
-                        payload.extend_from_slice(&[0u8, 0u8, 0u8, 1u8]);
-                        payload.extend_from_slice(&pps);
-                        payload.extend_from_slice(&[0u8, 0u8, 0u8, 1u8]);
-                        payload.extend_from_slice(&full_nal_buf);
-
-                        let frame = Frame {
-                            timestamp: Timestamp::from_micros(ts as u64),
-                            keyframe: true,
-                            payload: payload.freeze(),
-                        };
-                        frame_tx.send(frame).unwrap();
                     }
                     NalInterest::Buffer
                 },
@@ -258,11 +313,40 @@ impl AnnexBStreamImport {
                         track.write(f);
                     },
                     Err(std::sync::mpsc::TryRecvError::Empty) => break,
-                    Err(_) => panic!("frame_rx channel disconnected"),
+                    Err(e) => {
+                        eprintln!("Channel error: {:?}", e);
+                        break;
+                    }
                 }
             }
         }
 
         Ok(())
     }
+}
+
+// Helper function to read all bytes from a NAL
+fn read_nal_bytes(nal: RefNal<'_>) -> Option<BytesMut> {
+    let mut nal_reader = nal.reader();
+    let mut full_nal_buf = BytesMut::new();
+    let mut buf = [0u8; 1024];
+    
+    loop {
+        match nal_reader.read(&mut buf) {
+            Ok(n) => {
+                if n == 0 {
+                    break;
+                } else {
+                    full_nal_buf.extend_from_slice(&buf[..n]);
+                }
+            },
+            Err(e) => {
+                eprintln!("Error reading NAL: {:?}", e);
+                return None;
+            }
+        }
+    }
+    
+    Some(full_nal_buf)
+}
 }
