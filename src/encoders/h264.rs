@@ -70,10 +70,27 @@ pub enum H264EncoderError {
         prev_pts: i64,
         curr_pts: i64
     },
-    #[error("ffmpeg error: ")]
+    
+    #[error("FFmpeg error: {0}")]
     FfmpegError(#[from] AvError),
-    #[error("failed to alloc avcodec context")]
+
+    #[error("Failed to allocate AVCodec context")]
     AvCodecAllocContextError,
+    
+    #[error("Codec not found: {name}")]
+    CodecNotFound { name: String },
+    
+    #[error("Scaling context error: {0}")]
+    ScalingError(String),
+    
+    #[error("Frame encoding error: {0}")]
+    EncodingError(String),
+    
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
+    
+    #[error("Invalid state: {0}")]
+    InvalidState(String),
 }
 
 pub struct H264Encoder {
@@ -118,15 +135,21 @@ impl H264Encoder {
             extra_opts.set(opt.0.as_str(), opt.1.as_str());
         }
 
-        let ffmpeg_codec = ffmpeg::encoder::find_by_name(ec.enc_type.as_str()).unwrap();
+        let ffmpeg_codec = ffmpeg::encoder::find_by_name(ec.enc_type.as_str())
+            .ok_or_else(|| H264EncoderError::CodecNotFound { 
+                name: ec.enc_type.as_str().to_string() 
+            })?;
         let ffmpeg_context = codec_context_as(&ffmpeg_codec)?;
-        let mut ffmpeg_vid_encoder = ffmpeg_context.encoder().video().unwrap();
+        let mut ffmpeg_vid_encoder = ffmpeg_context.encoder().video()
+            .ok_or_else(|| H264EncoderError::InvalidState(
+                "Failed to create video encoder from context".to_string()
+            ))?;
         ffmpeg_vid_encoder.set_width(ec.output_width);
         ffmpeg_vid_encoder.set_height(ec.output_height);
         ffmpeg_vid_encoder.set_format(AvPixel::YUV420P);
         ffmpeg_vid_encoder.set_frame_rate(Some((ec.framerate as i32, 1)));
         ffmpeg_vid_encoder.set_time_base(Rational(1, ec.framerate as i32));
-        ffmpeg_vid_encoder.set_bit_rate(ec.bitrate as usize);
+        ffmpeg_vid_encoder.set_bit_rate(ec.bitrate);
         if ec.disable_b_frames {
             ffmpeg_vid_encoder.set_max_b_frames(0_usize);
         }
@@ -161,38 +184,52 @@ impl H264Encoder {
     pub fn encode_mat(&mut self, pts: Option<i64>, input: &Mat) -> Result<Option<EncodedFrame>, H264EncoderError> {
         let width = input.cols();
         let height = input.rows();
+        
+        // Verify values are positive before converting
+        if width <= 0 || height <= 0 {
+            return Err(H264EncoderError::InvalidInput(
+                format!("Invalid dimensions: width={}, height={}", width, height)
+            ));
+        }
+            
         let mut out_frame = AvFrame::new(
             AvPixel::YUV420P,
-            width.try_into().unwrap(),
-            height.try_into().unwrap(),
+            width as u32,
+            height as u32,
         );
 
         let mut in_frame = AvFrame::new(
             self.input_type,
-            width.try_into().unwrap(),
-            height.try_into().unwrap(),
+            width as u32,
+            height as u32,
         );
 
+        let data_bytes = input.data_bytes()
+            .ok_or_else(|| H264EncoderError::InvalidInput("Failed to get data bytes from Mat".to_string()))?;
+        
         in_frame
             .data_mut(0)
-            .copy_from_slice(input.data_bytes().unwrap());
+            .copy_from_slice(data_bytes);
 
-        self.scaler.run(&in_frame, &mut out_frame).unwrap();
+        self.scaler.run(&in_frame, &mut out_frame)
+            .map_err(|e| H264EncoderError::ScalingError(e.to_string()))?;
+            
         self.encode(pts, out_frame)
     }
 
     pub fn encode_raw(&mut self, pts: Option<i64>, input: &[u8]) -> Result<Option<EncodedFrame>, H264EncoderError> {
         debug!("input len: {}", input.len());
+        
         let mut out_frame = AvFrame::new(
             AvPixel::YUV420P,
-            self.output_width.try_into().unwrap(),
-            self.output_height.try_into().unwrap(),
+            self.output_width as i32,
+            self.output_height as i32,
         );
 
         let mut in_frame = AvFrame::new(
             self.input_type,
-            self.input_width.try_into().unwrap(),
-            self.input_height.try_into().unwrap(),
+            self.input_width as i32,
+            self.input_height as i32,
         );
 
         if in_frame.planes() > 1 {
@@ -200,14 +237,29 @@ impl H264Encoder {
             for i in 0..in_frame.planes() {
                 let buf_size = in_frame.data(i).len();
                 let end_id = start_id + buf_size;
+                
+                if end_id > input.len() {
+                    return Err(H264EncoderError::InvalidInput(
+                        format!("Input buffer too small: needed {}, got {}", end_id, input.len())
+                    ));
+                }
+                
                 in_frame.data_mut(i).copy_from_slice(&input[start_id..end_id]);
                 start_id = end_id;
             }
-            // in_frame.data_mut(0).copy_from_slice(input);
         } else {
+            if input.len() < in_frame.data(0).len() {
+                return Err(H264EncoderError::InvalidInput(
+                    format!("Input buffer too small: needed {}, got {}", in_frame.data(0).len(), input.len())
+                ));
+            }
+            
             in_frame.data_mut(0).copy_from_slice(input);
         }
-        self.scaler.run(&in_frame, &mut out_frame).unwrap();
+        
+        self.scaler.run(&in_frame, &mut out_frame)
+            .map_err(|e| H264EncoderError::ScalingError(e.to_string()))?;
+            
         self.encode(pts, out_frame)
     }
 
@@ -225,7 +277,10 @@ impl H264Encoder {
 
         frame.set_pts(pts);
         self.prev_pts = pts;
-        self.encoder.send_frame(&frame).unwrap();
+        
+        self.encoder.send_frame(&frame)
+            .map_err(|e| H264EncoderError::EncodingError(format!("Failed to send frame: {}", e)))?;
+            
         self.retrieve_nal()
     }
 
@@ -265,9 +320,17 @@ impl H264Encoder {
                 }
             }
             Err(e) => {
-                debug!("got ffmpeg encoder error: {e}");
-                // TODO: better error handling here
-                Ok(None)
+                // For AVERROR(EAGAIN), this is not a real error, just means "try again later"
+                if matches!(e, AvError::Other { errno } if errno == ffmpeg::libc::EAGAIN) {
+                    debug!("No output frames available yet (EAGAIN): {e}");
+                    Ok(None)
+                } else if matches!(e, AvError::Eof) {
+                    debug!("End of stream reached");
+                    Ok(None)
+                } else {
+                    debug!("FFmpeg encoder error: {e}");
+                    Err(H264EncoderError::FfmpegError(e))
+                }
             }
         }
     }
