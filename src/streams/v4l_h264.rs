@@ -3,7 +3,7 @@ use anyhow::Result;
 use bytes::BytesMut;
 
 use crate::encoders::{EncoderConfig, EncoderType, FfmpegOptions, H264Encoder, InputType};
-use ffmpeg::util::format::Pixel as AvPixel;
+use ffmpeg_next::util::format::Pixel as AvPixel;
 
 use tokio::sync::mpsc;
 
@@ -20,7 +20,7 @@ use v4l::prelude::*;
 // different encoder types (e.g AV1)
 
 fn fourcc_to_input_type(fourcc: v4l::FourCC) -> Option<InputType> {
-    match fourcc.repr {
+    match &fourcc.repr[..] {
         b"BGR3" => Some(AvPixel::BGR24),
         b"RGB3" => Some(AvPixel::RGB24),
         b"YUYV" => Some(AvPixel::YUYV422),
