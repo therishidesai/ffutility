@@ -17,9 +17,9 @@ bytes = "1.8.0"
 ffmpeg-next = "7.1.0"
 futures = "0.3.31"
 h264-reader = "0.8.0"
-moq-karp = "0.13.0"
-moq-native = "0.6.5"
-moq-transfork = "0.10.0"
+moq-karp = "0.15.0"
+moq-native = "0.7.1"
+moq-transfork = "0.12.0"
 opencv = { version = "0.93.4", optional = true }
 serde = { version = "1.0.215", features = ["derive"] }
 thiserror = "2.0.3"
