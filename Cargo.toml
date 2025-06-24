@@ -17,9 +17,9 @@ bytes = "1.8.0"
 ffmpeg-next = "7.1.0"
 futures = "0.3.31"
 h264-reader = "0.8.0"
-moq-karp = "0.15.0"
-moq-native = "0.7.1"
-moq-transfork = "0.12.0"
+moq-karp = "0.13.0"
+moq-native = "0.6.5"
+moq-transfork = "0.10.0"
 opencv = { version = "0.93.4", optional = true }
 serde = { version = "1.0.215", features = ["derive"] }
 thiserror = "2.0.3"
@@ -28,8 +28,7 @@ tokio-stream = { version = "0.1.16", features = ["full"] }
 tracing = "0.1.40"
 v4l = "0.14.0"
 
-[patch.crates-io]
-web-transport = "=0.9.3"
+# [patch.crates-io]
 # h264-reader = { git = "https://github.com/therishidesai/h264-reader", branch = "patch/remove-lfs" }
 
 [dev-dependencies]
@@ -38,4 +37,3 @@ bytes = "1.8.0"
 futures = "0.3.31"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 url = { version = "2.5.3", features = ["serde"] }
-
