@@ -3,7 +3,7 @@ use anyhow::Result;
 use ffutility::{encoders::FfmpegOptions, parsers::AnnexBStreamImport, streams::{V4lH264Stream, V4lH264Config}};
 
 use moq_karp::BroadcastProducer;
-use moq_native::quic;
+use moq_native::quic_impl as quic;
 
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
