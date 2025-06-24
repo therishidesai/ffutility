@@ -3,7 +3,7 @@ use anyhow::Result;
 use bytes::BytesMut;
 
 use crate::encoders::{EncoderConfig, EncoderType, FfmpegOptions, H264Encoder, InputType};
-use ffmpeg::util::format::Pixel as AvPixel;
+use ffmpeg_next::util::format::Pixel as AvPixel;
 
 use tokio::sync::mpsc;
 
@@ -21,15 +21,15 @@ use v4l::prelude::*;
 
 fn fourcc_to_input_type(fourcc: v4l::FourCC) -> Option<InputType> {
     match fourcc.repr {
-        b"BGR3" => Some(AvPixel::BGR24),
-        b"RGB3" => Some(AvPixel::RGB24),
-        b"YUYV" => Some(AvPixel::YUYV422),
-        b"UYVY" => Some(AvPixel::UYVY422),
-        b"YV12" => Some(AvPixel::YUV420P),
-        b"NV12" => Some(AvPixel::NV12),
-        b"NV21" => Some(AvPixel::NV21),
-        b"MJPG" => Some(AvPixel::YUVJ420P),
-        b"GREY" => Some(AvPixel::GRAY8),
+        *b"BGR3" => Some(AvPixel::BGR24),
+        *b"RGB3" => Some(AvPixel::RGB24),
+        *b"YUYV" => Some(AvPixel::YUYV422),
+        *b"UYVY" => Some(AvPixel::UYVY422),
+        *b"YV12" => Some(AvPixel::YUV420P),
+        *b"NV12" => Some(AvPixel::NV12),
+        *b"NV21" => Some(AvPixel::NV21),
+        *b"MJPG" => Some(AvPixel::YUVJ420P),
+        *b"GREY" => Some(AvPixel::GRAY8),
         _ => None,
     }
 }
