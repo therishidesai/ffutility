@@ -28,7 +28,8 @@ tokio-stream = { version = "0.1.16", features = ["full"] }
 tracing = "0.1.40"
 v4l = "0.14.0"
 
-# [patch.crates-io]
+[patch.crates-io]
+web-transport = "=0.9.3"
 # h264-reader = { git = "https://github.com/therishidesai/h264-reader", branch = "patch/remove-lfs" }
 
 [dev-dependencies]

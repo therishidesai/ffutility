@@ -38,7 +38,7 @@ async fn main() -> Result<()> {
     let session = Session::connect(web_transport_session).await?;
 
     // Step 4: Create broadcast producer with namespace
-    let namespace = "test-zed";
+    let namespace = "test-zed".to_string();
     let broadcast = BroadcastProducer::new(session.clone(), namespace)?;
 
     // --- Major API Change End ---
