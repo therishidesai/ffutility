@@ -3,6 +3,7 @@ use anyhow::Result;
 use bytes::BytesMut;
 
 use crate::encoders::{EncoderConfig, EncoderType, FfmpegOptions, H264Encoder, InputType};
+use ffmpeg::util::format::Pixel as AvPixel;
 
 use tokio::sync::mpsc;
 
@@ -18,13 +19,44 @@ use v4l::prelude::*;
 // TODO: make this more generic so you can have a v4l stream with
 // different encoder types (e.g AV1)
 
+fn fourcc_to_input_type(fourcc: v4l::FourCC) -> Option<InputType> {
+    match fourcc.repr {
+        b"BGR3" => Some(AvPixel::BGR24),
+        b"RGB3" => Some(AvPixel::RGB24),
+        b"YUYV" => Some(AvPixel::YUYV422),
+        b"UYVY" => Some(AvPixel::UYVY422),
+        b"YV12" => Some(AvPixel::YUV420P),
+        b"NV12" => Some(AvPixel::NV12),
+        b"NV21" => Some(AvPixel::NV21),
+        b"MJPG" => Some(AvPixel::YUVJ420P),
+        b"GREY" => Some(AvPixel::GRAY8),
+        _ => None,
+    }
+}
+
 pub struct V4lH264Config {
     pub output_width: u32,
     pub output_height: u32,
     pub bitrate: usize,
-    pub input_type: InputType,
-    pub v4l_fourcc: v4l::FourCC,
     pub video_dev: String,
+}
+
+impl V4lH264Config {
+    pub fn detect_input_type(&self) -> Result<(InputType, v4l::FourCC)> {
+        let video_dev = Device::with_path(&self.video_dev)?;
+        let format = video_dev.format()?;
+        let fourcc = format.fourcc;
+        
+        if let Some(input_type) = fourcc_to_input_type(fourcc) {
+            Ok((input_type, fourcc))
+        } else {
+            anyhow::bail!(
+                "Unsupported FourCC format: {} ({}). Supported formats: BGR3, RGB3, YUYV, UYVY, YV12, NV12, NV21, MJPG, GREY",
+                fourcc,
+                std::str::from_utf8(&fourcc.repr).unwrap_or("invalid")
+            )
+        }
+    }
 }
 
 pub struct V4lH264Stream {
@@ -35,6 +67,12 @@ impl V4lH264Stream {
         let (tx, rx) = mpsc::channel::<BytesMut>(10);
 
         std::thread::spawn(move || {
+            // Detect input type and fourcc from the device
+            let (input_type, detected_fourcc) = cfg.detect_input_type()
+                .expect("failed to detect input type from V4L device");
+            
+            tracing::info!("detected fourcc: {}, input type: {:?}", detected_fourcc, input_type);
+
             // TODO: better error handling, should close the channel correctly instead of exploding
             loop {
                 // block until the v4l_device is up
@@ -45,12 +83,12 @@ impl V4lH264Stream {
                 tracing::trace!("{} got formats: {:?}", &cfg.video_dev.as_str(), formats);
 
                 if !formats.iter().any(|fmt| {
-                    fmt.fourcc == cfg.v4l_fourcc
+                    fmt.fourcc == detected_fourcc
                 }) {
-                    tracing::error!("{} doesn't have correct FourCC!", &cfg.video_dev.as_str());
+                    tracing::error!("{} doesn't have detected FourCC {}!", &cfg.video_dev.as_str(), detected_fourcc);
                     std::thread::sleep(std::time::Duration::from_secs(1));
                 } else {
-                    tracing::info!("{} has correct FourCC!", &cfg.video_dev.as_str());
+                    tracing::info!("{} has detected FourCC {}!", &cfg.video_dev.as_str(), detected_fourcc);
                     break;
                 }
             }
@@ -71,7 +109,7 @@ impl V4lH264Stream {
                 bitrate: cfg.bitrate,
                 disable_b_frames: false,
                 enc_type: EncoderType::X264,
-                input_type: cfg.input_type,
+                input_type,
             };
 
             let mut pts = 0;

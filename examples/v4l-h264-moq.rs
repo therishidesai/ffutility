@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use ffutility::{encoders::{FfmpegOptions, InputType}, parsers::AnnexBStreamImport, streams::{V4lH264Stream, V4lH264Config}};
+use ffutility::{encoders::FfmpegOptions, parsers::AnnexBStreamImport, streams::{V4lH264Stream, V4lH264Config}};
 
 use moq_karp::BroadcastProducer;
 use moq_native::quic;
@@ -41,10 +41,6 @@ async fn main() -> Result<()> {
         output_width: 736,
         output_height: 414,
         bitrate: 300000, // bitrate
-        // input_type: InputType::YUV420P,
-        // input_type: InputType::YUYV422,
-        v4l_fourcc: v4l::FourCC::new(b"BGR3"),
-        input_type: InputType::BGR24,
         video_dev: String::from("/dev/video4"),
     };
 
