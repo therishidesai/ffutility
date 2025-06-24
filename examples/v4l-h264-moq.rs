@@ -28,8 +28,7 @@ async fn main() -> Result<()> {
 
     let session = quic_client.client.connect(Url::parse("https://relay.quic.video").unwrap()).await?;
 
-
-    let session = moq_transfork::Session::connect(session).await?;
+    let session = moq_transfork::Session::connect(session.into()).await?;
 
     let path = moq_transfork::Path::new().push("test-zed");
 
