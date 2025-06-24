@@ -2,10 +2,11 @@ use anyhow::Result;
 
 use ffutility::{encoders::FfmpegOptions, parsers::AnnexBStreamImport, streams::{V4lH264Stream, V4lH264Config}};
 
+use moq_karp::BroadcastProducer;
+use moq_native::{ClientConfig, ClientTls};
 use moq_transfork::Session;
 
-use moq_native::client::Client;
-
+use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 
 use tracing_subscriber::EnvFilter;
@@ -14,33 +15,36 @@ use url::Url;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Tracing/logging setup remains the same.
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .with_writer(std::io::stderr)
         .init();
 
-    // --- Major API Change Start ---
+    // Step 1: Create client config with TLS settings
+    let client_config = ClientConfig {
+        bind: SocketAddr::from(([0, 0, 0, 0], 0)),
+        tls: ClientTls {
+            root: vec![],
+            disable_verify: Some(true),
+        },
+    };
 
-    // 1. Connection and session setup is now much simpler.
-    // The old method of manually creating a TLS config and a QUIC endpoint is gone.
-    // Now, you create a ClientConfig and use the high-level `Client::connect`.
+    // Step 2: Initialize client and connect to relay
+    let client = client_config.init()?;
     let url = Url::parse("https://relay.quic.video")?;
-    let client = Session::connect(url).await?;
+    let web_transport_session = client.connect(url).await?;
 
-    // The `Client` object you get back IS the session. There's no separate `moq_transfork::Session`.
+    // Step 3: Create MoQ session from WebTransport session
+    let session = Session::connect(web_transport_session).await?;
 
-    // 2. The concept of a "producer" or "broadcast" is now built into the client.
-    // You "announce" a namespace to the relay to get a `Publisher` object.
-    // This replaces `moq_karp::BroadcastProducer` and `moq_transfork::Path`.
-    let namespace = "test-zed".to_string();
-
-    let publisher = client.announce(namespace).await?;
+    // Step 4: Create broadcast producer with namespace
+    let namespace = "test-zed";
+    let broadcast = BroadcastProducer::new(session.clone(), namespace)?;
 
     // --- Major API Change End ---
 
 
-    let mut annexb_import = AnnexBStreamImport::new(Arc::new(Mutex::new(publisher)), 736, 414);
+    let mut annexb_import = AnnexBStreamImport::new(Arc::new(Mutex::new(broadcast)), 736, 414);
 
     let v4l_config = V4lH264Config {
         output_width: 736,
@@ -58,6 +62,6 @@ async fn main() -> Result<()> {
 
     tokio::select! {
         res = annexb_import.read_from(&mut rx_stream, &mut track) => Ok(res?),
-        res = client.closed() => Err(res.into()),
+        res = session.closed() => Err(res.into()),
     }
 }
