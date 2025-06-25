@@ -10,7 +10,8 @@ use h264_reader::annexb::AnnexBReader;
 use h264_reader::nal::{pps::PicParameterSet, slice::{SliceFamily, SliceHeader}, sps::SeqParameterSet, Nal, RefNal, UnitType};
 use h264_reader::push::NalInterest;
 
-use moq_karp::{BroadcastProducer, Dimensions, H264, Frame, Timestamp, Track, TrackProducer, Video};
+use hang::{BroadcastProducer, catalog::{H264, Video, VideoConfig}, Frame, Timestamp, TrackProducer};
+use moq_lite::Track;
 
 use std::cell::Cell;
 use std::io::Read;
@@ -40,11 +41,15 @@ impl AnnexBStreamImport {
         let mut sps: Option<SeqParameterSet> = None;
         let found_sps = AtomicBool::new(false);
         let found_pps = AtomicBool::new(false);
+        println!("made it here");
 
         let mut reader = AnnexBReader::accumulate(|nal: RefNal<'_>| {
+            println!("made it here ??");
             let nal_unit_type = nal.header().unwrap().nal_unit_type();
+            println!("made it here");
             match nal_unit_type {
                 UnitType::SeqParameterSet => {
+                    println!("Found SPS!");
                     let sps_local= SeqParameterSet::from_bits(nal.rbsp_bits()).unwrap();
                     ctx.put_seq_param_set(sps_local.clone());
                     sps = Some(sps_local);
@@ -52,6 +57,7 @@ impl AnnexBStreamImport {
                     NalInterest::Buffer
                 },
                 UnitType::PicParameterSet => {
+                    println!("Found PPS!");
                     let pps = PicParameterSet::from_bits(&ctx, nal.rbsp_bits()).unwrap();
                     ctx.put_pic_param_set(pps);
                     found_pps.store(true, Ordering::SeqCst);
@@ -61,10 +67,12 @@ impl AnnexBStreamImport {
             }
         });
 
-        while !found_pps.load(Ordering::SeqCst) && !found_sps.load(Ordering::SeqCst) {
+        while !found_pps.load(Ordering::SeqCst) || !found_sps.load(Ordering::SeqCst) {
             if let Some(buffer) = input.next().await {
+                println!("Got {} bytes in annexb parser", buffer.len());
                 reader.push(&buffer);
             } else {
+                println!("Stream ended in annexb parser");
                 break
             }
         }
@@ -78,19 +86,26 @@ impl AnnexBStreamImport {
             self.codec = Some(codec.clone());
 
             // let description = BytesMut::new();
+            // TODO: everything below coded_height has been hardcoded in, change that
             let track = Video {
                 track: Track { name: String::from("video0"), priority: 2 },
-                resolution: Dimensions {
-                    width: self.width,
-                    height: self.height,
-                },
-                codec: codec.into(),
-                description: None,
-                bitrate: None,
+                config: VideoConfig{
+                    codec: codec.into(),
+                    description: None,
+                    coded_width: Some(self.width),
+                    coded_height: Some(self.height),
+                    display_ratio_width: Some(1),
+                    display_ratio_height: Some(1),
+                    bitrate: Some(30000),
+                    framerate: Some(60.0),
+                    optimize_for_latency: Some(true),
+                    rotation: Some(0.0),
+                    flip: Some(false),
+                }
             };
 
             let mut broadcast = self.broadcast.lock().unwrap();
-            let track = broadcast.publish_video(track).unwrap();
+            let track = broadcast.create_video(track);
             self.ctx = Some(ctx);
 
             Ok(track)

@@ -612,9 +612,9 @@ dependencies = [
  "ffmpeg-next",
  "futures",
  "h264-reader",
- "moq-karp",
- "moq-native 0.7.1",
- "moq-transfork",
+ "hang",
+ "moq-lite",
+ "moq-native",
  "opencv",
  "serde",
  "thiserror 2.0.12",
@@ -624,6 +624,7 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "v4l",
+ "web-transport-quinn",
 ]
 
 [[package]]
@@ -792,6 +793,29 @@ dependencies = [
  "log",
  "memchr",
  "rfc6381-codec",
+]
+
+[[package]]
+name = "hang"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cbcbadeb4f5f21b29656a1dd2376f8da5e736bdbf6ce0fd21310c0fc452a85ca"
+dependencies = [
+ "bytes",
+ "derive_more",
+ "futures",
+ "hex",
+ "lazy_static",
+ "moq-lite",
+ "mp4-atom",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "thiserror 2.0.12",
+ "tokio",
+ "tracing",
+ "web-async",
 ]
 
 [[package]]
@@ -1273,104 +1297,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "moq-async"
-version = "0.1.3"
+name = "moq-lite"
+version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dfc8907c39515aad8b3ffb4adeeab924d3d93cfc9ba44f9c9a8fd75cffc00a20"
+checksum = "473a1b3a99f839a8d1bf16ad07af05561003a77669efb512161102e4acc6e354"
 dependencies = [
- "futures",
- "tokio",
- "tracing",
- "wasm-bindgen-futures",
-]
-
-[[package]]
-name = "moq-karp"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c4a0fb3362115c05c98f358a923a6666e13b38e917970b6b3f5cb635d737c9a"
-dependencies = [
- "anyhow",
+ "async-channel",
  "bytes",
- "clap",
- "derive_more",
  "futures",
- "hex",
- "lazy_static",
- "moq-async",
- "moq-native 0.6.9",
- "moq-transfork",
- "mp4-atom",
- "regex",
+ "num_enum",
  "serde",
- "serde_json",
- "serde_with",
- "thiserror 2.0.12",
- "tokio",
- "tracing",
- "url",
- "web-time",
-]
-
-[[package]]
-name = "moq-lite"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f729a2a4c56ec1b4575bd3faa6e9940d14533766fb386451300091b3ce60d146"
-dependencies = [
- "async-channel",
- "bytes",
- "futures",
- "num_enum",
  "thiserror 2.0.12",
  "tokio",
  "tracing",
  "web-async",
- "web-transport 0.9.3",
-]
-
-[[package]]
-name = "moq-lite"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03fcc7c2fad87014793c3a433bb8e3675a759fffbaca4ef3a828dcdcb1737eb5"
-dependencies = [
- "async-channel",
- "bytes",
- "futures",
- "num_enum",
- "thiserror 2.0.12",
- "tokio",
- "tracing",
- "web-async",
- "web-transport 0.9.3",
-]
-
-[[package]]
-name = "moq-native"
-version = "0.6.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4f2d102de0c5460bee73442e30230ff5c6da23dba46b2eca9383f1261132410"
-dependencies = [
- "anyhow",
- "clap",
- "futures",
- "hex",
- "moq-lite 0.2.0",
- "quinn",
- "rcgen",
- "reqwest",
- "ring",
- "rustls",
- "rustls-native-certs",
- "rustls-pemfile",
- "time",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "url",
- "web-transport 0.9.3",
- "webpki",
+ "web-transport",
 ]
 
 [[package]]
@@ -1383,7 +1324,7 @@ dependencies = [
  "clap",
  "futures",
  "hex",
- "moq-lite 0.3.2",
+ "moq-lite",
  "quinn",
  "rcgen",
  "reqwest",
@@ -1398,31 +1339,15 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
- "web-transport 0.9.3",
+ "web-transport",
  "webpki",
 ]
 
 [[package]]
-name = "moq-transfork"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e99ea825e9f3cf32dcf7d3a4dd83335d3581471f2368b70f443d54318c18c81"
-dependencies = [
- "bytes",
- "futures",
- "moq-async",
- "num_enum",
- "thiserror 2.0.12",
- "tokio",
- "tracing",
- "web-transport 0.8.2",
-]
-
-[[package]]
 name = "mp4-atom"
-version = "0.7.2"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36e7635cc6e683cfbc1c92ddc03c7ea88cebf8733699b0c9fbc5cecb6a9e743e"
+checksum = "40a59fd1da0f5d0864ba19bd9d45cefc3dc19835f6f3bbf9016a86e4b4480042"
 dependencies = [
  "bytes",
  "derive_more",
@@ -2917,19 +2842,6 @@ dependencies = [
 
 [[package]]
 name = "web-transport"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc59d00957217e26daa6ad59d1ad006572ac56621d7aa23e60097c22e6416657"
-dependencies = [
- "bytes",
- "thiserror 2.0.12",
- "url",
- "web-transport-quinn 0.6.0",
- "web-transport-wasm 0.4.7",
-]
-
-[[package]]
-name = "web-transport"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "11c476f2c40013a2c651393df0fcff40a33e1fc24fddfd3cfa69d2c298018bd0"
@@ -2937,8 +2849,8 @@ dependencies = [
  "bytes",
  "thiserror 2.0.12",
  "url",
- "web-transport-quinn 0.7.2",
- "web-transport-wasm 0.5.1",
+ "web-transport-quinn",
+ "web-transport-wasm",
 ]
 
 [[package]]
@@ -2951,27 +2863,6 @@ dependencies = [
  "http",
  "thiserror 2.0.12",
  "url",
-]
-
-[[package]]
-name = "web-transport-quinn"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5407951ffdcaccd6d1c22d90b39e049d1efd8489e68000e08f3c88a621b6aa4"
-dependencies = [
- "aws-lc-rs",
- "bytes",
- "futures",
- "http",
- "log",
- "quinn",
- "quinn-proto",
- "rustls",
- "rustls-native-certs",
- "thiserror 2.0.12",
- "tokio",
- "url",
- "web-transport-proto",
 ]
 
 [[package]]
@@ -2993,22 +2884,6 @@ dependencies = [
  "tokio",
  "url",
  "web-transport-proto",
-]
-
-[[package]]
-name = "web-transport-wasm"
-version = "0.4.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10f1e3b95dcb97a2e10154764be82935822483c2821867c77f47be6481e0c7f0"
-dependencies = [
- "bytes",
- "js-sys",
- "thiserror 2.0.12",
- "url",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-streams",
- "web-sys",
 ]
 
 [[package]]
