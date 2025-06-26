@@ -5,11 +5,12 @@
 //! Usage:
 //! ```bash
 //! # Webcam streaming (raw YUV420P)
-//! ffmpeg -stream_loop -1 -i test.mp4 -f rawvideo -pix_fmt yuv420p - | cargo run --example mac-h264-moq
+//! ffmpeg -f avfoundation -r 30 -i "0" -f rawvideo -pix_fmt yuv420p - | cargo run --example mac-h264-moq
 //! 
 //! # File streaming (raw YUV420P)
-//! ffmpeg -i test.mp4 -f rawvideo -pix_fmt yuv420p - | cargo run --example mac-h264-moq
+//! ffmpeg -stream_loop -1 -i test.mp4 -f rawvideo -pix_fmt yuv420p - | cargo run --example mac-h264-moq
 //! ```
+//! 
 use anyhow::Result;
 use bytes::BytesMut;
 use ffutility::parsers::AnnexBStreamImport;
