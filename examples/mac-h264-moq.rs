@@ -7,8 +7,8 @@
 //! # Webcam streaming
 //! ffmpeg -f avfoundation -i "0" -f h264 - | cargo run --example mac-h264-moq
 //! 
-//! # File streaming  
-//! ffmpeg -i video.mp4 -f h264 - | cargo run --example mac-h264-moq
+//! # File streaming  (use this command, it works better)
+//! ffmpeg -i test.mp4 -f h264 - | cargo run --example mac-h264-moq
 //! ```
 use anyhow::Result;
 use bytes::BytesMut;
@@ -80,7 +80,7 @@ async fn main() -> Result<()> {
     // NOTE: You can now start producing a broadcast even when the session is severed
     let broadcast: hang::BroadcastProducer = hang::BroadcastProducer::new();
 
-    let url = Url::parse("https://relay.quic.video/anon/test-mac").unwrap();
+    let url = Url::parse("https://127.0.0.1:4443/anon/test-mac").unwrap();
 
     // Perform the web_transport handshake.
     let session: web_transport_quinn::Session = quic_client.connect(url).await?;
