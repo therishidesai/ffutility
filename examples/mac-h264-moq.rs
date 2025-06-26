@@ -14,11 +14,8 @@
 use anyhow::Result;
 use bytes::BytesMut;
 use ffutility::parsers::AnnexBStreamImport;
-use ffutility::encoders::{EncoderConfig, EncoderType, H264Encoder, InputType};
-use std::io::{self, Read};
-use std::thread;
-use tokio::sync::mpsc;
-use tokio_stream::wrappers::ReceiverStream;
+use ffutility::encoders::InputType;
+use ffutility::streams::StdinH264Stream;
 
 // MoQ imports
 use moq_native::client;
@@ -27,76 +24,6 @@ use std::sync::{Arc, Mutex};
 use tracing_subscriber::EnvFilter;
 use url::Url;
 
-/// A stream that reads raw video data from stdin and encodes it to H.264.
-pub struct StdinH264Stream {}
-
-impl StdinH264Stream {
-    /// Creates a new stream that reads raw video from stdin and encodes to H.264.
-    /// Expects raw video data (not H.264) from ffmpeg.
-    pub fn new(width: u32, height: u32, input_type: InputType) -> Result<ReceiverStream<BytesMut>> {
-        let (tx, rx) = mpsc::channel::<BytesMut>(10);
-
-        thread::spawn(move || {
-            let frame_size = match input_type {
-                InputType::YUV420P => (width * height * 3) / 2,
-                InputType::NV12 => (width * height * 3) / 2,
-                InputType::RGB24 => width * height * 3,
-                InputType::BGR24 => width * height * 3,
-                _ => {
-                    eprintln!("Unsupported input type: {:?}", input_type);
-                    return;
-                }
-            } as usize;
-
-            let ec = EncoderConfig {
-                input_width: width,
-                input_height: height,
-                output_width: width,
-                output_height: height,
-                framerate: 30,
-                gop: None,
-                bitrate: 2000000,
-                disable_b_frames: false,
-                enc_type: EncoderType::X264,
-                input_type,
-            };
-
-            let mut encoder = match H264Encoder::new(ec, &vec![]) {
-                Ok(enc) => enc,
-                Err(e) => {
-                    eprintln!("Failed to create H264Encoder: {:?}", e);
-                    return;
-                }
-            };
-
-            let mut stdin = io::stdin();
-            let mut buffer = vec![0u8; frame_size];
-            let mut pts = 0;
-
-            loop {
-                match stdin.read_exact(&mut buffer) {
-                    Ok(()) => {
-                        match encoder.encode_raw(Some(pts), &buffer) {
-                            Ok(Some(encoded_frame)) => {
-                                if tx.blocking_send(encoded_frame.nal_bytes).is_err() {
-                                    break;
-                                }
-                            }
-                            Ok(None) => {
-                                // Encoder buffering
-                            }
-                            Err(_) => break,
-                        }
-                        pts += 1;
-                    }
-                    Err(_) => break,
-                }
-            }
-        });
-
-        Ok(ReceiverStream::new(rx))
-    }
-}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -132,8 +59,7 @@ async fn main() -> Result<()> {
     let mut annexb_import = AnnexBStreamImport::new(Arc::new(Mutex::new(broadcast)), 736, 414);
 
     // Create stdin H.264 stream
-    // MP4 resolution is (640x360), Webcam is (1920x1080)
-    // TODO: change this so that it isn't hardcoded but rather can automatically detect the resolution
+    // TODO: change this so that it isn't hardcoded but rather can automatically detect the resolution, current resolution is webcam
     let mut rx_stream = StdinH264Stream::new(1920, 1080, InputType::YUV420P)?;
     let mut track = annexb_import.init_from(&mut rx_stream).await?;
 
