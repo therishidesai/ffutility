@@ -5,7 +5,7 @@
 //! Usage:
 //! ```bash
 //! # Webcam streaming (raw YUV420P)
-//! ffmpeg -f avfoundation -r 30 -i "0" -f rawvideo -pix_fmt yuv420p - | cargo run --example mac-h264-moq
+//! ffmpeg -f avfoundation -r 30 -s 1920x1080 -i "0" -f rawvideo -pix_fmt yuv420p - | cargo run --example mac-h264-moq
 //! 
 //! # File streaming (raw YUV420P)
 //! ffmpeg -stream_loop -1 -i test.mp4 -f rawvideo -pix_fmt yuv420p - | cargo run --example mac-h264-moq
@@ -47,7 +47,6 @@ impl StdinH264Stream {
                     return;
                 }
             } as usize;
-            
 
             let ec = EncoderConfig {
                 input_width: width,
@@ -133,6 +132,8 @@ async fn main() -> Result<()> {
     let mut annexb_import = AnnexBStreamImport::new(Arc::new(Mutex::new(broadcast)), 736, 414);
 
     // Create stdin H.264 stream
+    // MP4 resolution is (640x360), Webcam is (1920x1080)
+    // TODO: change this so that it isn't hardcoded but rather can automatically detect the resolution
     let mut rx_stream = StdinH264Stream::new(1920, 1080, InputType::YUV420P)?;
     let mut track = annexb_import.init_from(&mut rx_stream).await?;
 
