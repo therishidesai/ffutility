@@ -41,15 +41,13 @@ impl AnnexBStreamImport {
         let mut sps: Option<SeqParameterSet> = None;
         let found_sps = AtomicBool::new(false);
         let found_pps = AtomicBool::new(false);
-        println!("made it here");
 
         let mut reader = AnnexBReader::accumulate(|nal: RefNal<'_>| {
-            println!("made it here ??");
             let nal_unit_type = nal.header().unwrap().nal_unit_type();
-            println!("made it here");
+            println!("Found NAL unit type: {:?}", nal_unit_type);
             match nal_unit_type {
                 UnitType::SeqParameterSet => {
-                    println!("Found SPS!");
+                    println!("Processing SPS");
                     let sps_local= SeqParameterSet::from_bits(nal.rbsp_bits()).unwrap();
                     ctx.put_seq_param_set(sps_local.clone());
                     sps = Some(sps_local);
@@ -57,26 +55,28 @@ impl AnnexBStreamImport {
                     NalInterest::Buffer
                 },
                 UnitType::PicParameterSet => {
-                    println!("Found PPS!");
+                    println!("Processing PPS");
                     let pps = PicParameterSet::from_bits(&ctx, nal.rbsp_bits()).unwrap();
                     ctx.put_pic_param_set(pps);
                     found_pps.store(true, Ordering::SeqCst);
                     NalInterest::Buffer
                 },
-                _ => NalInterest::Ignore,
+                _ => {
+                    println!("Ignoring NAL unit type: {:?}", nal_unit_type);
+                    NalInterest::Ignore
+                },
             }
         });
-
         while !found_pps.load(Ordering::SeqCst) || !found_sps.load(Ordering::SeqCst) {
             if let Some(buffer) = input.next().await {
                 println!("Got {} bytes in annexb parser", buffer.len());
+                println!("First 20 bytes: {:02x?}", &buffer[..std::cmp::min(20, buffer.len())]);
                 reader.push(&buffer);
             } else {
                 println!("Stream ended in annexb parser");
                 break
             }
         }
-
         if let Some(sps) = sps {
             let codec = H264 {
                 profile: sps.profile().profile_idc(),
