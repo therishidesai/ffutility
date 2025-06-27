@@ -45,7 +45,7 @@ async fn main() -> Result<()> {
     // NOTE: You can now start producing a broadcast even when the session is severed
     let broadcast: hang::BroadcastProducer = hang::BroadcastProducer::new();
 
-    let token = std::fs::read_to_string("/Users/Gordy.Sun/moq/rs/dev/bum-token.jwt")?
+    let token = std::fs::read_to_string("/Users/Gordy.Sun/moq/rs/dev/bum-unified.jwt")?
         .trim()
         .to_string();
     let url = Url::parse(&format!("https://127.0.0.1:4443/bum/?jwt={}", token))?;
@@ -57,7 +57,9 @@ async fn main() -> Result<()> {
     let mut session: moq_lite::Session = moq_lite::Session::connect(session).await?;
 
     // Publish the broadcast
-    session.publish("huh", broadcast.inner.consume());
+    println!("Publishing stream '' to session...");
+    session.publish("", broadcast.inner.consume());
+    println!("Stream '' published successfully!");
     let mut annexb_import = AnnexBStreamImport::new(Arc::new(Mutex::new(broadcast)), 736, 414);
 
     // Create stdin H.264 stream

@@ -46,7 +46,7 @@ async fn main() -> Result<()> {
     // NOTE: You can now start producing a broadcast even when the session is severed
     let broadcast: hang::BroadcastProducer = hang::BroadcastProducer::new();
 
-    let url = Url::parse("https://127.0.0.1:4443/anon/test-mac").unwrap();
+    let url = Url::parse("https://127.0.0.1:4443/demo/").unwrap();
 
     // Perform the web_transport handshake.
     let session: web_transport_quinn::Session = quic_client.connect(url).await?;
@@ -55,7 +55,7 @@ async fn main() -> Result<()> {
     let mut session: moq_lite::Session = moq_lite::Session::connect(session).await?;
 
     // Publish the broadcast
-    session.publish("", broadcast.inner.consume());
+    session.publish("test", broadcast.inner.consume());
     let mut annexb_import = AnnexBStreamImport::new(Arc::new(Mutex::new(broadcast)), 736, 414);
 
     // Create stdin H.264 stream
