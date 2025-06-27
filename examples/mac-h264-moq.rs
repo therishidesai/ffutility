@@ -55,7 +55,7 @@ async fn main() -> Result<()> {
     let mut session: moq_lite::Session = moq_lite::Session::connect(session).await?;
 
     // Publish the broadcast
-    session.publish("test", broadcast.inner.consume());
+    session.publish("", broadcast.inner.consume());
     let mut annexb_import = AnnexBStreamImport::new(Arc::new(Mutex::new(broadcast)), 736, 414);
 
     // Create stdin H.264 stream
