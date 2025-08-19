@@ -26,7 +26,13 @@
             rust-bin.nightly.latest.default
             rust-analyzer
           ];
+          buildInputs = [
+            ffmpeg.dev
+            pkgs.clang
+            pkgs.llvmPackages.libclang
+          ];
           LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
+          BINDGEN_EXTRA_CLANG_ARGS = "-I${pkgs.glibc.dev}/include";
         };
       }
     );

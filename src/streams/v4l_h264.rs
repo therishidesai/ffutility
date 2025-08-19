@@ -1,4 +1,4 @@
-#![cfg(all(target_os = "linux", feature = "v4l"))]
+#![cfg(target_os = "linux")]
 
 use anyhow::Result;
 
