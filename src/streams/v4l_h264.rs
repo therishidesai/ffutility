@@ -23,6 +23,7 @@ use v4l::prelude::*;
 
 fn fourcc_to_input_type(fourcc: v4l::FourCC) -> Option<InputType> {
     match &fourcc.repr[..] {
+        b"BGR4" => Some(AvPixel::BGR24),
         b"BGR3" => Some(AvPixel::BGR24),
         b"RGB3" => Some(AvPixel::RGB24),
         b"YUYV" => Some(AvPixel::YUYV422),
