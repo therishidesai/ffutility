@@ -122,9 +122,21 @@ impl V4lH264Stream {
                 // TODO: Better error handling
                 let (m_buf, meta) = stream.next().unwrap();
                 let bytesused = meta.bytesused as usize;
+
+                // --- FIX: Check for empty frames and skip them ---
+                if bytesused == 0 {
+                    tracing::warn!("V4L: Received empty frame from driver, skipping.");
+                    continue; // Skip this loop iteration and try to get the next frame
+                }
+                // --- END OF FIX ---
+
                 // debug!("V4L bytesused: {}", meta.bytesused);
                 if let Some(encoded_frame) = encoder.encode_raw(Some(pts), &m_buf[..bytesused]).unwrap() {
-                    tx.blocking_send(encoded_frame.nal_bytes).unwrap();
+                    if tx.blocking_send(encoded_frame.nal_bytes).is_err() {
+                        // The receiver has been dropped, so the stream is no longer needed.
+                        tracing::info!("Receiver dropped, shutting down V4L capture thread.");
+                        break;
+                    }
                 }
                 pts += 1;
             }
