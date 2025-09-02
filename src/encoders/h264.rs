@@ -74,8 +74,6 @@ pub enum H264EncoderError {
     FfmpegError(#[from] AvError),
     #[error("failed to alloc avcodec context")]
     AvCodecAllocContextError,
-    #[error("input frame is empty")]
-    EmptyFrame,
 }
 
 pub struct H264Encoder {
