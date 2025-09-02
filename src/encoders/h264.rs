@@ -183,6 +183,12 @@ impl H264Encoder {
 
     pub fn encode_raw(&mut self, pts: Option<i64>, input: &[u8]) -> Result<Option<EncodedFrame>, H264EncoderError> {
         debug!("input len: {}", input.len());
+        
+        if input.is_empty() {
+            debug!("Received empty frame, skipping encoding");
+            return Ok(None);
+        }
+        
         let mut out_frame = AvFrame::new(
             AvPixel::YUV420P,
             self.output_width.try_into().unwrap(),
