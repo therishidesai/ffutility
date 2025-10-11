@@ -1,4 +1,4 @@
-pub mod parsers;
 pub mod encoders;
+
+#[cfg(feature = "streams")]
 pub mod streams;
-// pub mod streams;
