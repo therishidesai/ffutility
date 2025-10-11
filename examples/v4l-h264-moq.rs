@@ -2,13 +2,12 @@
 
 use anyhow::Result;
 
-use ffutility::{encoders::FfmpegOptions, parsers::AnnexBStreamImport, streams::{V4lH264Stream, V4lH264Config}};
+use ffutility::{encoders::FfmpegOptions, streams::{V4lH264Stream, V4lH264Config}};
 
-use hang::BroadcastProducer;
-use moq_native::client;
+use hang::moq_lite;
+use hang::annexb::Import;
 
-use std::net::SocketAddr;
-use std::sync::{Arc, Mutex};
+use moq_native::client::{ClientTls, ClientConfig};
 
 use tracing_subscriber::EnvFilter;
 
@@ -21,43 +20,42 @@ async fn main() -> Result<()> {
         .with_writer(std::io::stderr)
         .init();
 
-    let mut tls = moq_native::client::ClientTls::default();
+    let mut tls = ClientTls::default();
     tls.disable_verify = Some(true);
 
-    let quic_client = client::Client::new(client::ClientConfig {
-        bind: SocketAddr::from(([0, 0, 0, 0], 0)),
+    let quic_client = ClientConfig {
+        bind: "[::]:0".parse().unwrap(),
         tls    
-    })?;
+    }.init()?;
 
-    let session = quic_client.connect(Url::parse("https://relay.quic.video").unwrap()).await?;
+    let broadcast = moq_lite::Broadcast::produce();
 
-    let mut session = moq_lite::Session::connect(session).await?;
+    let session = quic_client.connect(Url::parse("http://localhost:4443/anon").unwrap()).await?;
 
-    let broadcast = BroadcastProducer::new();
+    // Create an origin producer to publish to the broadcast.
+    let origin = moq_lite::Origin::produce();
+    origin.producer.publish_broadcast("bbb", broadcast.consumer);
 
-    session.publish("test-zed", broadcast.inner.consume());
+    let session = moq_lite::Session::connect(session, origin.consumer, None).await?;
 
-    let mut annexb_import = AnnexBStreamImport::new(Arc::new(Mutex::new(broadcast)), 736, 414);
+    let mut import = Import::new(broadcast.producer);
 
     let v4l_config = V4lH264Config {
         output_width: 736,
         output_height: 414,
         bitrate: 300000, // bitrate
-        video_dev: String::from("/dev/video4"),
+        video_dev: String::from("/dev/video0"),
     };
 
     let mut ffmpeg_opts = FfmpegOptions::new();
     ffmpeg_opts.push((String::from("preset"), String::from("superfast")));
 
     let mut rx_stream = V4lH264Stream::new(v4l_config, ffmpeg_opts)?;
-    // let mut rx_reader = StreamReader::new(rx_stream);
 
-    let mut track = annexb_import.init_from(&mut rx_stream).await?;
-    eprintln!("init track");
-    // annexb_import.publish(&mut session)?;
+    // let _ = import.init_from(&mut rx_stream).await?;
 
     tokio::select! {
-        res = annexb_import.read_from(&mut rx_stream, &mut track) => Ok(res?),
+        res = import.read_from(&mut rx_stream) => Ok(res?),
         res = session.closed() => Err(res.into()),
     }
 }

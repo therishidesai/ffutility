@@ -5,11 +5,8 @@ use anyhow::Result;
 use bytes::BytesMut;
 
 use crate::encoders::{EncoderConfig, EncoderType, FfmpegOptions, H264Encoder, InputType};
+
 use ffmpeg_next::util::format::Pixel as AvPixel;
-
-use tokio::sync::mpsc;
-
-use tokio_stream::wrappers::ReceiverStream;
 
 use tracing::debug;
 
@@ -17,6 +14,11 @@ use v4l::buffer::Type;
 use v4l::io::traits::CaptureStream;
 use v4l::video::traits::Capture;
 use v4l::prelude::*;
+
+use std::io;
+use tokio_util::io::StreamReader;
+use tokio_stream::wrappers::ReceiverStream;
+use tokio::sync::mpsc;
 
 // TODO: make this more generic so you can have a v4l stream with
 // different encoder types (e.g AV1)
@@ -48,6 +50,7 @@ impl V4lH264Config {
     pub fn detect_input_type(&self) -> Result<(InputType, v4l::FourCC)> {
         let video_dev = Device::with_path(&self.video_dev)?;
         let format = video_dev.format()?;
+        eprintln!("got format");
         let fourcc = format.fourcc;
         
         if let Some(input_type) = fourcc_to_input_type(fourcc) {
@@ -66,8 +69,10 @@ pub struct V4lH264Stream {
 }
 
 impl V4lH264Stream {
-    pub fn new(cfg: V4lH264Config, ffmpeg_opts: FfmpegOptions) -> Result<ReceiverStream<BytesMut>> {
-        let (tx, rx) = mpsc::channel::<BytesMut>(10);
+    pub fn new(cfg: V4lH264Config, ffmpeg_opts: FfmpegOptions) -> Result<StreamReader<ReceiverStream<Result<BytesMut, io::Error>>, BytesMut>> {
+        // only allow 10 frames to be buffered
+        // TODO: maybe make this a configurable option
+        let (tx, rx) = mpsc::channel::<Result<BytesMut, io::Error>>(10);
 
         std::thread::spawn(move || {
             // Detect input type and fourcc from the device
@@ -124,12 +129,12 @@ impl V4lH264Stream {
                 let bytesused = meta.bytesused as usize;
                 // debug!("V4L bytesused: {}", meta.bytesused);
                 if let Some(encoded_frame) = encoder.encode_raw(Some(pts), &m_buf[..bytesused]).unwrap() {
-                    tx.blocking_send(encoded_frame.nal_bytes).unwrap();
+                    tx.blocking_send(Ok(encoded_frame.nal_bytes)).unwrap();
                 }
                 pts += 1;
             }
         });
 
-        Ok(ReceiverStream::from(rx))
+        Ok(StreamReader::new(ReceiverStream::new(rx)))
     }
 }
