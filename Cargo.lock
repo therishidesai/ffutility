@@ -774,7 +774,7 @@ checksum = "ab2f85be813ce08f0569fcd816f256c6f4287c975d69a9a14ceacc309f1de967"
 [[package]]
 name = "hang"
 version = "0.5.3"
-source = "git+https://github.com/therishidesai/moq-rs?branch=feat%2Fhang-annexb-import#09b7e92b3148724f9ae69655ab7f6560a935bd21"
+source = "git+https://github.com/therishidesai/moq-rs?branch=feat%2Fhang-annexb-import#618687a0403f7432c0818dbc5068a7cfc964d220"
 dependencies = [
  "bytes",
  "derive_more",
@@ -1277,7 +1277,7 @@ dependencies = [
 [[package]]
 name = "moq-lite"
 version = "0.6.3"
-source = "git+https://github.com/therishidesai/moq-rs?branch=feat%2Fhang-annexb-import#09b7e92b3148724f9ae69655ab7f6560a935bd21"
+source = "git+https://github.com/therishidesai/moq-rs?branch=feat%2Fhang-annexb-import#618687a0403f7432c0818dbc5068a7cfc964d220"
 dependencies = [
  "async-channel",
  "bytes",
