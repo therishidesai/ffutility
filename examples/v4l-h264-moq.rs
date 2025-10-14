@@ -45,6 +45,7 @@ async fn main() -> Result<()> {
         output_height: 414,
         bitrate: 300000, // bitrate
         video_dev: String::from("/dev/video0"),
+        v4l_fourcc: v4l::FourCC::new(b"YUYV"),
     };
 
     let mut ffmpeg_opts = FfmpegOptions::new();
