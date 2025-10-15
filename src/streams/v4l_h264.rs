@@ -36,30 +36,23 @@ impl V4lH264Stream {
 
         std::thread::spawn(move || {
             // TODO: better error handling, should close the channel correctly instead of exploding
+            let mut v4l_dev = Device::with_path(&cfg.video_dev)
+                    .expect("Failed to open v4l device. Device may not exist.");
             loop {
                 // block until the v4l_device is up
-                let v4l_dev = Device::with_path(&cfg.video_dev)
-                    .expect("Failed to open v4l device. Device may not exist.");
-                let formats = v4l_dev.enum_formats().expect("Failed to get v4l formats.");
-
-                tracing::trace!("{} got formats: {:?}", &cfg.video_dev.as_str(), formats);
-
-                if !formats.iter().any(|fmt| {
-                    fmt.fourcc == cfg.v4l_fourcc
-                }) {
-                    tracing::error!("{} doesn't have correct FourCC!", &cfg.video_dev.as_str());
-                    std::thread::sleep(std::time::Duration::from_secs(1));
-                } else {
-                    tracing::info!("{} has correct FourCC!", &cfg.video_dev.as_str());
+                if cfg.v4l_fourcc == v4l_dev.format().unwrap().fourcc {
                     break;
+                } else {
+                    tracing::error!("{} doesn't have requested FourCC {}!", &cfg.video_dev.as_str(), cfg.v4l_fourcc);
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                    v4l_dev = Device::with_path(&cfg.video_dev)
+                        .expect("Failed to open v4l device. Device may not exist.");
                 }
             }
 
+            let mut stream = MmapStream::new(&v4l_dev, Type::VideoCapture).unwrap();
 
-            let video_dev = Device::with_path(&cfg.video_dev).unwrap();
-            let mut stream = MmapStream::new(&video_dev, Type::VideoCapture).unwrap();
-
-            let format = video_dev.format().unwrap();
+            let format = v4l_dev.format().unwrap();
             debug!("V4L Format: {:?}", format);
             let ec = EncoderConfig {
                 input_width: format.width,
