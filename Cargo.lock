@@ -773,8 +773,7 @@ checksum = "ab2f85be813ce08f0569fcd816f256c6f4287c975d69a9a14ceacc309f1de967"
 
 [[package]]
 name = "hang"
-version = "0.5.3"
-source = "git+https://github.com/therishidesai/moq-rs?branch=feat%2Fhang-annexb-import#618687a0403f7432c0818dbc5068a7cfc964d220"
+version = "0.6.0"
 dependencies = [
  "bytes",
  "derive_more",
@@ -782,7 +781,7 @@ dependencies = [
  "h264-parser 0.4.0",
  "hex",
  "lazy_static",
- "moq-lite 0.6.3",
+ "moq-lite 0.8.1",
  "mp4-atom",
  "regex",
  "serde",
@@ -1276,8 +1275,7 @@ dependencies = [
 
 [[package]]
 name = "moq-lite"
-version = "0.6.3"
-source = "git+https://github.com/therishidesai/moq-rs?branch=feat%2Fhang-annexb-import#618687a0403f7432c0818dbc5068a7cfc964d220"
+version = "0.8.1"
 dependencies = [
  "async-channel",
  "bytes",
@@ -1288,14 +1286,14 @@ dependencies = [
  "tokio",
  "tracing",
  "web-async",
- "web-transport",
+ "web-transport-trait",
 ]
 
 [[package]]
 name = "moq-lite"
-version = "0.7.1"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5f81940d83847690ed7a37dd66db76979a31493ac9a33b60e75ac139a45d13c"
+checksum = "c0960a60a94712ca946d9deaf0d02e1baa74c519942bd428432935acdc06d626"
 dependencies = [
  "async-channel",
  "bytes",
@@ -1310,15 +1308,15 @@ dependencies = [
 
 [[package]]
 name = "moq-native"
-version = "0.8.3"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "251413714e2cf14f4862507a7c60132e4831e394b9f54036e3a5be3ffff94ecb"
+checksum = "088447cbb8345720ed5ca84d746e2ec0295d24f218daa4bc6e6b5085c239e9e8"
 dependencies = [
  "anyhow",
  "clap",
  "futures",
  "hex",
- "moq-lite 0.7.1",
+ "moq-lite 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "quinn",
  "rcgen",
  "reqwest",
@@ -2729,18 +2727,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "web-streams"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15c4d5dbf19463c4b65e974303d453cc11991873c7a4a4953214f791d73303a2"
-dependencies = [
- "thiserror 2.0.12",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
-]
-
-[[package]]
 name = "web-sys"
 version = "0.3.81"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2761,19 +2747,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "web-transport"
-version = "0.9.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03efb036f13785e3cbb9285e9fb94872a0887a9f4e7efeb02647cc12f5e55eea"
-dependencies = [
- "bytes",
- "thiserror 2.0.12",
- "url",
- "web-transport-quinn",
- "web-transport-wasm",
-]
-
-[[package]]
 name = "web-transport-proto"
 version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2787,9 +2760,9 @@ dependencies = [
 
 [[package]]
 name = "web-transport-quinn"
-version = "0.8.1"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ccba8a1ab2aae70119c9ada57e4a2324ebe1820a18814ca47a818f01dcd00f46"
+checksum = "88e34f06fb4cd4760dc9bd348199d1759eed196ebb4ce0aa40b3817069cc58e8"
 dependencies = [
  "bytes",
  "futures",
@@ -2807,27 +2780,11 @@ dependencies = [
 
 [[package]]
 name = "web-transport-trait"
-version = "0.1.1"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4850148841799c83f033f4dddccb219f1f097aff6db1bda5b0d3be69fefb32bd"
+checksum = "07665af67c56637c938425911b9b5a4f6aaea45709354e4656b9e2de45768c68"
 dependencies = [
  "bytes",
-]
-
-[[package]]
-name = "web-transport-wasm"
-version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44b2af1bed400caa442d75217bb7ece5e1ec853daf60affd5d2448c0a2063662"
-dependencies = [
- "bytes",
- "js-sys",
- "thiserror 2.0.12",
- "url",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-streams",
- "web-sys",
 ]
 
 [[package]]

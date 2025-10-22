@@ -34,9 +34,9 @@ anyhow = "1.0.93"
 bytes = "1.8.0"
 futures = "0.3.31"
 h264-parser = "0.3.0"
-# hang = "0.5.5"
-hang = { git = "https://github.com/therishidesai/moq-rs", branch = "feat/hang-annexb-import" }
-moq-native = "0.8.3"
+# hang = "0.6.0"
+hang = { path = "/home/rishi/moq/rs/hang" }
+moq-native = "0.8.4"
 tokio = { version = "1.47.1", features = ["full"] }
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 url = { version = "2.5.3", features = ["serde"] }

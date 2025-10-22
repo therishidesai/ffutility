@@ -78,6 +78,7 @@ impl V4lH264Stream {
 
             let format = v4l_dev.format().unwrap();
             debug!("V4L Format: {:?}", format);
+            // TODO: Make this EncoderConfig settable by the user
             let ec = EncoderConfig {
                 input_width: format.width,
                 input_height: format.height,
@@ -86,7 +87,7 @@ impl V4lH264Stream {
                 framerate: 15,
                 gop: None,
                 bitrate: cfg.bitrate,
-                disable_b_frames: false,
+                disable_b_frames: true,
                 enc_type: EncoderType::X264,
                 input_type,
             };

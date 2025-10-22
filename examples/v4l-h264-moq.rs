@@ -1,6 +1,6 @@
 #![cfg(all(target_os = "linux", feature = "v4l"))]
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 
 use ffutility::{encoders::FfmpegOptions, streams::{V4lH264Stream, V4lH264Config}};
 
@@ -57,6 +57,6 @@ async fn main() -> Result<()> {
 
     tokio::select! {
         res = import.read_from(&mut rx_stream) => Ok(res?),
-        res = session.closed() => Err(res.into()),
+        res = session.closed() => Ok(res?),
     }
 }
