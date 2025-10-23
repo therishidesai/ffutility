@@ -8,7 +8,7 @@ use crate::encoders::{EncoderConfig, EncoderType, FfmpegOptions, H264Encoder, In
 
 use ffmpeg_next::util::format::Pixel as AvPixel;
 
-use tracing::debug;
+use tracing::{debug, error};
 
 use v4l::buffer::Type;
 use v4l::io::traits::CaptureStream;
@@ -97,13 +97,26 @@ impl V4lH264Stream {
             
             loop {
                 // TODO: Better error handling
-                let (m_buf, meta) = stream.next().unwrap();
-                let bytesused = meta.bytesused as usize;
-                // debug!("V4L bytesused: {}", meta.bytesused);
-                if let Some(encoded_frame) = encoder.encode_raw(Some(pts), &m_buf[..bytesused]).unwrap() {
-                    tx.blocking_send(Ok(encoded_frame.nal_bytes)).unwrap();
+                match stream.next() {
+                    Ok((m_buf, meta)) => {
+                        let bytesused = meta.bytesused as usize;
+                        // debug!("V4L bytesused: {}", meta.bytesused);
+                        if let Some(encoded_frame) = encoder.encode_raw(Some(pts), &m_buf[..bytesused]).unwrap() {
+                            tx.blocking_send(encoded_frame.nal_bytes).unwrap();
+                        }
+                        pts += 1;
+                    }
+                    Err(e) => {
+                        if let Some(error_code) = e.raw_os_error() {
+                            if error_code == 5 {
+                                error!("Got I/O Error: {} for {}. Retrying in 1 second", error_code, &cfg.video_dev);
+                                std::thread::sleep(std::time::Duration::from_secs(1));
+                            } else {
+                                panic!("Unrecoverable OS Error: {}", e);
+                            }
+                        }
+                    }
                 }
-                pts += 1;
             }
         });
 
