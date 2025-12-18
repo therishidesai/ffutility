@@ -32,10 +32,8 @@ v4l = { version = "0.14.0", optional = true }
 [dev-dependencies]
 anyhow = "1.0.93"
 bytes = "1.8.0"
-futures = "0.3.31"
 h264-parser = "0.3.0"
-# hang = "0.6.0"
-hang = { path = "/home/rishi/moq/rs/hang" }
+hang = "0.6.0"
 moq-native = "0.8.4"
 tokio = { version = "1.47.1", features = ["full"] }
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
