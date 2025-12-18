@@ -594,7 +594,6 @@ dependencies = [
  "anyhow",
  "bytes",
  "ffmpeg-next",
- "futures",
  "h264-parser 0.3.0",
  "hang",
  "moq-native",
@@ -773,7 +772,9 @@ checksum = "ab2f85be813ce08f0569fcd816f256c6f4287c975d69a9a14ceacc309f1de967"
 
 [[package]]
 name = "hang"
-version = "0.6.0"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bfbcfa919a779063884ed9e1d43be97d139158de418ac3de8f99b199885e5c08"
 dependencies = [
  "bytes",
  "derive_more",
@@ -781,7 +782,7 @@ dependencies = [
  "h264-parser 0.4.0",
  "hex",
  "lazy_static",
- "moq-lite 0.8.1",
+ "moq-lite 0.9.6",
  "mp4-atom",
  "regex",
  "serde",
@@ -1276,12 +1277,13 @@ dependencies = [
 [[package]]
 name = "moq-lite"
 version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0960a60a94712ca946d9deaf0d02e1baa74c519942bd428432935acdc06d626"
 dependencies = [
  "async-channel",
  "bytes",
  "futures",
  "num_enum",
- "serde",
  "thiserror 2.0.12",
  "tokio",
  "tracing",
@@ -1291,14 +1293,15 @@ dependencies = [
 
 [[package]]
 name = "moq-lite"
-version = "0.8.1"
+version = "0.9.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0960a60a94712ca946d9deaf0d02e1baa74c519942bd428432935acdc06d626"
+checksum = "38d8792c8e9f105c93b456cada20a6bbe2deb97568cb4cb2d855ed5c858f27f7"
 dependencies = [
  "async-channel",
  "bytes",
  "futures",
  "num_enum",
+ "serde",
  "thiserror 2.0.12",
  "tokio",
  "tracing",
@@ -1316,7 +1319,7 @@ dependencies = [
  "clap",
  "futures",
  "hex",
- "moq-lite 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "moq-lite 0.8.1",
  "quinn",
  "rcgen",
  "reqwest",
@@ -1907,7 +1910,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1974,7 +1977,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
