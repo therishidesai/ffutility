@@ -1,6 +1,6 @@
 [package]
 name = "ffutility"
-version = "0.15.0"
+version = "0.16.0"
 edition = "2021"
 license = "MPL-2.0"
 description = "A grab bag of video streaming utilities"
@@ -16,7 +16,7 @@ streams = ["dep:tokio", "dep:tokio-stream", "dep:tokio-util"]
 [dependencies]
 anyhow = "1.0.93"
 bytes = "1.8.0"
-ffmpeg-next = "7.1.0"
+ffmpeg-next = "8.0.0"
 opencv = { version = "0.93.4", optional = true }
 serde = { version = "1.0.215", features = ["derive"] }
 thiserror = "2.0.3"
