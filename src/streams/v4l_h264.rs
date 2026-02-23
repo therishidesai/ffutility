@@ -4,7 +4,7 @@ use anyhow::{bail, Result};
 
 use bytes::{Bytes, BytesMut};
 
-use crate::encoders::{EncoderConfig, EncoderType, FfmpegOptions, H264Encoder, InputType};
+use crate::encoders::{EncoderConfig, EncoderType, FfmpegOptions, VideoEncoder, InputType};
 
 use ffmpeg_next::util::format::Pixel as AvPixel;
 
@@ -96,20 +96,20 @@ impl V4lH264Stream {
                 let mut f = File::create("loading-video.h264").unwrap();
 
                 let mut loading_encoder =
-                    H264Encoder::new(loading_ec, &loading_ffmpeg_opts).unwrap();
+                    VideoEncoder::new(loading_ec, &loading_ffmpeg_opts).unwrap();
                 let mut nal_frames = Vec::new();
                 loop {
                     if let Some(encoded_frame) = loading_encoder
                         .encode_raw(Some(0), &loading_image.data)
                         .unwrap()
                     {
-                        nal_frames.push(encoded_frame.nal_bytes.freeze());
+                        nal_frames.push(encoded_frame.data.freeze());
                         break;
                     }
                 }
 
                 for encoded_frame in loading_encoder.drain().unwrap() {
-                    let frame = encoded_frame.nal_bytes.clone().freeze();
+                    let frame = encoded_frame.data.clone().freeze();
                     f.write_all(&frame);
                     f.flush();
                     nal_frames.push(frame);
@@ -173,7 +173,7 @@ impl V4lH264Stream {
             ));
 
             let mut pts: i64 = 0;
-            let mut encoder = H264Encoder::new(ec, &live_ffmpeg_opts).unwrap();
+            let mut encoder = VideoEncoder::new(ec, &live_ffmpeg_opts).unwrap();
 
             loop {
                 // TODO: Better error handling
@@ -184,7 +184,7 @@ impl V4lH264Stream {
                         if let Some(encoded_frame) =
                             encoder.encode_raw(Some(pts), &m_buf[..bytesused]).unwrap()
                         {
-                            tx.blocking_send(Ok(encoded_frame.nal_bytes)).unwrap();
+                            tx.blocking_send(Ok(encoded_frame.data)).unwrap();
                         }
                         pts += 1;
                     }
