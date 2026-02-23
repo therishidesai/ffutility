@@ -17,6 +17,7 @@ use opencv::{
 };
 
 use serde::{Deserialize, Serialize};
+use strum::{Display, EnumString, IntoStaticStr};
 
 use thiserror::Error;
 
@@ -27,8 +28,20 @@ use tracing::{debug, error};
 pub type FfmpegOptions = Vec<(String, String)>;
 pub type InputType = AvPixel;
 
+/// The video codec standard, independent of the specific encoder implementation.
+#[derive(Serialize, Deserialize, Debug, Display, EnumString, IntoStaticStr, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum VideoCodec {
+    #[serde(rename = "h264")]
+    #[strum(serialize = "h264")]
+    H264,
+    #[serde(rename = "av1")]
+    #[strum(serialize = "av1")]
+    Av1,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum EncoderType {
+    // H.264
     #[serde(rename = "libx264")]
     X264,
     #[serde(rename = "h264_nvenc")]
@@ -37,6 +50,11 @@ pub enum EncoderType {
     // NOTE: Only for Jetson NVENC systems. Will not work on any other
     // systems
     H264Nvmpi,
+    // AV1
+    #[serde(rename = "libsvtav1")]
+    SvtAv1,
+    #[serde(rename = "av1_nvenc")]
+    Av1Nvenc,
 }
 
 impl EncoderType {
@@ -45,6 +63,16 @@ impl EncoderType {
             Self::X264 => "libx264",
             Self::H264Nvenc => "h264_nvenc",
             Self::H264Nvmpi => "h264_nvmpi",
+            Self::SvtAv1 => "libsvtav1",
+            Self::Av1Nvenc => "av1_nvenc",
+        }
+    }
+
+    /// Returns the video codec standard for this encoder.
+    pub fn codec(&self) -> VideoCodec {
+        match self {
+            Self::X264 | Self::H264Nvenc | Self::H264Nvmpi => VideoCodec::H264,
+            Self::SvtAv1 | Self::Av1Nvenc => VideoCodec::Av1,
         }
     }
 }
@@ -64,7 +92,7 @@ pub struct EncoderConfig {
 }
 
 #[derive(Error, Debug)]
-pub enum H264EncoderError {
+pub enum VideoEncoderError {
     #[error("PTS was not monotonically increasing: previous PTS: {prev_pts} > PTS: {curr_pts}")]
     PTSNotMonotonic {
         prev_pts: i64,
@@ -76,7 +104,7 @@ pub enum H264EncoderError {
     AvCodecAllocContextError,
 }
 
-pub struct H264Encoder {
+pub struct VideoEncoder {
     encoder: AvVideoEncoder,
     scaler: AvScalingContext,
     prev_pts: Option<i64>,
@@ -87,32 +115,32 @@ pub struct H264Encoder {
     output_height: u32,
 }
 
-fn codec_context_as(codec: &AvCodec) -> Result<AvContext, H264EncoderError> {
+fn codec_context_as(codec: &AvCodec) -> Result<AvContext, VideoEncoderError> {
     unsafe {
         let context_ptr = ffmpeg::ffi::avcodec_alloc_context3(codec.as_ptr());
         if !context_ptr.is_null() {
             Ok(AvContext::wrap(context_ptr, None))
         } else {
-            Err(H264EncoderError::AvCodecAllocContextError)
+            Err(VideoEncoderError::AvCodecAllocContextError)
         }
     }
 }
 
 pub struct EncodedFrame {
-    pub nal_bytes: bytes::BytesMut,
+    pub data: bytes::BytesMut,
     pub is_keyframe: bool,
     pub duration: i64,
     pub pts: Option<i64>,
 }
 
-unsafe impl Send for H264Encoder {}
-unsafe impl Sync for H264Encoder {}
+unsafe impl Send for VideoEncoder {}
+unsafe impl Sync for VideoEncoder {}
 
-impl H264Encoder {
+impl VideoEncoder {
     pub fn new(
         ec: EncoderConfig,
         extra_ffmpeg_opts: &FfmpegOptions,
-    ) -> Result<Self, H264EncoderError> {
+    ) -> Result<Self, VideoEncoderError> {
         let mut extra_opts = AvDictionary::new();
         for opt in extra_ffmpeg_opts {
             extra_opts.set(opt.0.as_str(), opt.1.as_str());
@@ -158,7 +186,7 @@ impl H264Encoder {
     }
 
     #[cfg(feature = "opencv")]
-    pub fn encode_mat(&mut self, pts: Option<i64>, input: &Mat) -> Result<Option<EncodedFrame>, H264EncoderError> {
+    pub fn encode_mat(&mut self, pts: Option<i64>, input: &Mat) -> Result<Option<EncodedFrame>, VideoEncoderError> {
         let width = input.cols();
         let height = input.rows();
         let mut out_frame = AvFrame::new(
@@ -181,7 +209,7 @@ impl H264Encoder {
         self.encode(pts, out_frame)
     }
 
-    pub fn encode_raw(&mut self, pts: Option<i64>, input: &[u8]) -> Result<Option<EncodedFrame>, H264EncoderError> {
+    pub fn encode_raw(&mut self, pts: Option<i64>, input: &[u8]) -> Result<Option<EncodedFrame>, VideoEncoderError> {
         debug!("input len: {}", input.len());
         
         if input.is_empty() {
@@ -217,11 +245,11 @@ impl H264Encoder {
         self.encode(pts, out_frame)
     }
 
-    pub fn encode(&mut self, pts: Option<i64>, mut frame: AvFrame) -> Result<Option<EncodedFrame>, H264EncoderError> {
+    pub fn encode(&mut self, pts: Option<i64>, mut frame: AvFrame) -> Result<Option<EncodedFrame>, VideoEncoderError> {
         if let Some(prev_pts) = self.prev_pts {
             if let Some(curr_pts) = pts {
                 if prev_pts > curr_pts {
-                    return Err(H264EncoderError::PTSNotMonotonic {
+                    return Err(VideoEncoderError::PTSNotMonotonic {
                         prev_pts,
                         curr_pts
                     })
@@ -236,7 +264,7 @@ impl H264Encoder {
     }
 
     /// Drains and consumes this encoder
-    pub fn drain(mut self) -> Result<Vec<EncodedFrame>, H264EncoderError> {
+    pub fn drain(mut self) -> Result<Vec<EncodedFrame>, VideoEncoderError> {
         self.encoder.send_eof()?;
         let mut result = vec![];
         while let Some(nal) = self.retrieve_nal()? {
@@ -247,7 +275,7 @@ impl H264Encoder {
 
     /// Drain a NAL out of the encoder. Typically not used directly,
     /// except after `begin_drain`.
-    fn retrieve_nal(&mut self) -> Result<Option<EncodedFrame>, H264EncoderError> {
+    fn retrieve_nal(&mut self) -> Result<Option<EncodedFrame>, VideoEncoderError> {
         let mut encoded_packet = AvPacket::empty();
         let encoder_res = self.encoder.receive_packet(&mut encoded_packet);
 
@@ -260,7 +288,7 @@ impl H264Encoder {
                 } else {
                     if let Some(nal) = encoded_data {
                         Ok(Some(EncodedFrame {
-                            nal_bytes: bytes::BytesMut::from(nal),
+                            data: bytes::BytesMut::from(nal),
                             is_keyframe: encoded_packet.is_key(),
                             duration: encoded_packet.duration(),
                             pts: encoded_packet.pts(),
