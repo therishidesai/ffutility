@@ -4,7 +4,7 @@ use anyhow::{bail, Result};
 
 use bytes::{Bytes, BytesMut};
 
-use crate::encoders::{EncoderConfig, EncoderType, FfmpegOptions, VideoEncoder, InputType};
+use crate::encoders::{EncoderConfig, EncoderType, FfmpegOptions, InputType, VideoEncoder};
 
 use ffmpeg_next::util::format::Pixel as AvPixel;
 
@@ -71,13 +71,6 @@ impl V4lH264Stream {
         let (tx, rx) = mpsc::channel::<Result<BytesMut, io::Error>>(10);
 
         std::thread::spawn(move || {
-            let mut loading_ffmpeg_opts = FfmpegOptions::new();
-            loading_ffmpeg_opts.push((String::from("preset"), String::from("medium")));
-            loading_ffmpeg_opts.push((String::from("tune"), String::from("stillimage")));
-            loading_ffmpeg_opts.push((
-                String::from("x264-params"),
-                String::from("repeat-headers=1:keyint=1:min-keyint=1:scenecut=0"),
-            ));
             // TODO: better error handling, should close the channel correctly instead of exploding
             let cached_loading_frames = cfg.loading_image.as_ref().map(|loading_image| {
                 let loading_ec = EncoderConfig {
@@ -85,18 +78,21 @@ impl V4lH264Stream {
                     input_height: loading_image.input_height,
                     output_width: cfg.output_width,
                     output_height: cfg.output_height,
-                    framerate: 10,
-                    gop: Some(1),
-                    bitrate: 1000000,
-                    disable_b_frames: true,
                     enc_type: EncoderType::X264,
                     input_type: loading_image.input_type,
+                    opts: vec![
+                        ("preset".into(), "medium".into()),
+                        ("tune".into(), "stillimage".into()),
+                        ("x264-params".into(), "repeat-headers=1:keyint=1:min-keyint=1:scenecut=0".into()),
+                        ("g".into(), "1".into()),
+                        ("b".into(), "1000000".into()),
+                        ("bf".into(), "0".into()),
+                    ],
                 };
 
                 let mut f = File::create("loading-video.h264").unwrap();
 
-                let mut loading_encoder =
-                    VideoEncoder::new(loading_ec, &loading_ffmpeg_opts).unwrap();
+                let mut loading_encoder = VideoEncoder::new(loading_ec).unwrap();
                 let mut nal_frames = Vec::new();
                 loop {
                     if let Some(encoded_frame) = loading_encoder
@@ -150,30 +146,28 @@ impl V4lH264Stream {
             let format = v4l_dev.format().unwrap();
             debug!("V4L Format: {:?}", format);
             // TODO: Make this EncoderConfig settable by the user
+            let mut opts = vec![
+                ("b".into(), cfg.bitrate.to_string()),
+                ("bf".into(), "0".into()),
+            ];
+            opts.extend(ffmpeg_opts.clone());
+            // repeat-headers=1 ensures SPS/PPS are emitted regularly.
+            // Critical for seamless transitions from overlay to live feed,
+            // as the decoder needs fresh SPS/PPS headers to reinitialize.
+            opts.push(("x264-params".into(), "repeat-headers=1".into()));
+
             let ec = EncoderConfig {
                 input_width: format.width,
                 input_height: format.height,
                 output_width: cfg.output_width,
                 output_height: cfg.output_height,
-                framerate: 15,
-                gop: None,
-                bitrate: cfg.bitrate,
-                disable_b_frames: true,
                 enc_type: EncoderType::X264,
                 input_type,
+                opts,
             };
 
-            // Add repeat-headers=1 to ensure SPS/PPS are emitted regularly.
-            // This is critical for seamless transitions from overlay to live feed,
-            // as the decoder needs fresh SPS/PPS headers to reinitialize.
-            let mut live_ffmpeg_opts = ffmpeg_opts.clone();
-            live_ffmpeg_opts.push((
-                String::from("x264-params"),
-                String::from("repeat-headers=1"),
-            ));
-
             let mut pts: i64 = 0;
-            let mut encoder = VideoEncoder::new(ec, &live_ffmpeg_opts).unwrap();
+            let mut encoder = VideoEncoder::new(ec).unwrap();
 
             loop {
                 // TODO: Better error handling

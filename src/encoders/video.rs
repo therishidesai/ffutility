@@ -5,7 +5,6 @@ use ffmpeg::codec::packet::Packet as AvPacket;
 use ffmpeg::software::scaling::{context::Context as AvScalingContext, flag::Flags};
 use ffmpeg::util::format::Pixel as AvPixel;
 use ffmpeg::util::frame::Video as AvFrame;
-use ffmpeg::util::rational::Rational;
 use ffmpeg::Dictionary as AvDictionary;
 use ffmpeg::Error as AvError;
 use ffmpeg_next as ffmpeg;
@@ -83,12 +82,9 @@ pub struct EncoderConfig {
     pub input_height: u32,
     pub output_width: u32,
     pub output_height: u32,
-    pub framerate: u32,
-    pub gop: Option<u32>,
-    pub bitrate: usize,
-    pub disable_b_frames: bool,
     pub enc_type: EncoderType,
     pub input_type: InputType,
+    pub opts: FfmpegOptions,
 }
 
 #[derive(Error, Debug)]
@@ -137,13 +133,10 @@ unsafe impl Send for VideoEncoder {}
 unsafe impl Sync for VideoEncoder {}
 
 impl VideoEncoder {
-    pub fn new(
-        ec: EncoderConfig,
-        extra_ffmpeg_opts: &FfmpegOptions,
-    ) -> Result<Self, VideoEncoderError> {
-        let mut extra_opts = AvDictionary::new();
-        for opt in extra_ffmpeg_opts {
-            extra_opts.set(opt.0.as_str(), opt.1.as_str());
+    pub fn new(ec: EncoderConfig) -> Result<Self, VideoEncoderError> {
+        let mut opts = AvDictionary::new();
+        for (k, v) in &ec.opts {
+            opts.set(k, v);
         }
 
         let ffmpeg_codec = ffmpeg::encoder::find_by_name(ec.enc_type.as_str()).unwrap();
@@ -152,16 +145,7 @@ impl VideoEncoder {
         ffmpeg_vid_encoder.set_width(ec.output_width);
         ffmpeg_vid_encoder.set_height(ec.output_height);
         ffmpeg_vid_encoder.set_format(AvPixel::YUV420P);
-        ffmpeg_vid_encoder.set_frame_rate(Some((ec.framerate as i32, 1)));
-        ffmpeg_vid_encoder.set_time_base(Rational(1, ec.framerate as i32));
-        ffmpeg_vid_encoder.set_bit_rate(ec.bitrate as usize);
-        if ec.disable_b_frames {
-            ffmpeg_vid_encoder.set_max_b_frames(0_usize);
-        }
-        if let Some(gop) = ec.gop {
-            ffmpeg_vid_encoder.set_gop(gop);
-        }
-        let encoder = ffmpeg_vid_encoder.open_with(extra_opts)?;
+        let encoder = ffmpeg_vid_encoder.open_with(opts)?;
 
         let scaler = AvScalingContext::get(
             ec.input_type,
@@ -219,14 +203,14 @@ impl VideoEncoder {
         
         let mut out_frame = AvFrame::new(
             AvPixel::YUV420P,
-            self.output_width.try_into().unwrap(),
-            self.output_height.try_into().unwrap(),
+            self.output_width,
+            self.output_height,
         );
 
         let mut in_frame = AvFrame::new(
             self.input_type,
-            self.input_width.try_into().unwrap(),
-            self.input_height.try_into().unwrap(),
+            self.input_width,
+            self.input_height,
         );
 
         if in_frame.planes() > 1 {
@@ -246,15 +230,11 @@ impl VideoEncoder {
     }
 
     pub fn encode(&mut self, pts: Option<i64>, mut frame: AvFrame) -> Result<Option<EncodedFrame>, VideoEncoderError> {
-        if let Some(prev_pts) = self.prev_pts {
-            if let Some(curr_pts) = pts {
-                if prev_pts > curr_pts {
-                    return Err(VideoEncoderError::PTSNotMonotonic {
-                        prev_pts,
-                        curr_pts
-                    })
-                }
-            }
+        if let (Some(prev_pts), Some(curr_pts)) = (self.prev_pts, pts) && prev_pts > curr_pts {
+            return Err(VideoEncoderError::PTSNotMonotonic {
+                prev_pts,
+                curr_pts,
+            });
         }
 
         frame.set_pts(pts);
