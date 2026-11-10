@@ -4,11 +4,13 @@ use anyhow::{bail, Result};
 
 use bytes::{Bytes, BytesMut};
 
-use crate::encoders::{EncoderConfig, EncoderType, FfmpegOptions, InputType, VideoEncoder};
+use crate::encoders::{
+    EncoderConfig, EncoderType, FfmpegOptions, InputType, VideoEncoder, VideoEncoderError,
+};
 
 use ffmpeg_next::util::format::Pixel as AvPixel;
 
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 
 use v4l::buffer::Type;
 use v4l::io::traits::CaptureStream;
@@ -170,6 +172,7 @@ impl V4lH264Stream {
 
             let mut pts: i64 = 0;
             let mut encoder = VideoEncoder::new(ec).unwrap();
+            let mut skipped_frames: u64 = 0;
 
             loop {
                 // TODO: Better error handling
@@ -177,12 +180,31 @@ impl V4lH264Stream {
                     Ok((m_buf, meta)) => {
                         let bytesused = meta.bytesused as usize;
                         // debug!("V4L bytesused: {}", meta.bytesused);
-                        if let Some(encoded_frame) =
-                            encoder.encode_raw(Some(pts), &m_buf[..bytesused]).unwrap()
-                        {
+                        let result = encoder.encode_raw(Some(pts), &m_buf[..bytesused]);
+                        pts += 1;
+
+                        if let Err(VideoEncoderError::InputSizeMismatch { expected, actual }) = result {
+                            if skipped_frames == 0 {
+                                warn!(
+                                    "{} sent a {} byte frame, expected {} bytes. Skipping until frames match",
+                                    &cfg.video_dev, actual, expected
+                                );
+                            }
+                            skipped_frames += 1;
+                            continue;
+                        }
+
+                        if skipped_frames > 0 {
+                            warn!(
+                                "{} resumed after skipping {} malformed frames",
+                                &cfg.video_dev, skipped_frames
+                            );
+                            skipped_frames = 0;
+                        }
+
+                        if let Some(encoded_frame) = result.unwrap() {
                             tx.blocking_send(Ok(encoded_frame.data)).unwrap();
                         }
-                        pts += 1;
                     }
                     Err(e) => {
                         if let Some(error_code) = e.raw_os_error() {

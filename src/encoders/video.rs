@@ -99,6 +99,11 @@ pub enum VideoEncoderError {
     FfmpegError(#[from] AvError),
     #[error("failed to alloc avcodec context")]
     AvCodecAllocContextError,
+    #[error("input frame is {actual} bytes, expected {expected} bytes")]
+    InputSizeMismatch {
+        expected: usize,
+        actual: usize,
+    },
 }
 
 pub struct VideoEncoder {
@@ -225,6 +230,14 @@ impl VideoEncoder {
             self.input_height,
         );
 
+        let expected: usize = (0..in_frame.planes()).map(|i| in_frame.data(i).len()).sum();
+        if input.len() != expected {
+            return Err(VideoEncoderError::InputSizeMismatch {
+                expected,
+                actual: input.len(),
+            });
+        }
+
         if in_frame.planes() > 1 {
             let mut start_id = 0;
             for i in 0..in_frame.planes() {
@@ -295,6 +308,46 @@ impl VideoEncoder {
                 // TODO: better error handling here
                 Ok(None)
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn bgr24_encoder() -> VideoEncoder {
+        VideoEncoder::new(EncoderConfig {
+            input_width: 64,
+            input_height: 64,
+            output_width: 64,
+            output_height: 64,
+            enc_type: EncoderType::X264,
+            input_type: AvPixel::BGR24,
+            opts: vec![("bf".into(), "0".into())],
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn encode_raw_rejects_short_input() {
+        let mut encoder = bgr24_encoder();
+        let result = encoder.encode_raw(Some(0), &[0; 64 * 48 * 3]);
+        assert!(matches!(
+            result,
+            Err(VideoEncoderError::InputSizeMismatch {
+                expected: 12288,
+                actual: 9216
+            })
+        ));
+    }
+
+    #[test]
+    fn encode_raw_accepts_full_input() {
+        let mut encoder = bgr24_encoder();
+        let frame = [0; 64 * 64 * 3];
+        for pts in 0..30 {
+            encoder.encode_raw(Some(pts), &frame).unwrap();
         }
     }
 }
